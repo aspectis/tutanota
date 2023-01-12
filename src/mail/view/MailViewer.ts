@@ -73,6 +73,8 @@ export class MailViewer implements Component<MailViewerAttrs> {
 
 	private viewModel!: MailViewerViewModel
 	private topScrollValue = 0
+	private pinchZoomable: PinchZoom | null = null
+	private topScrollValues: Array<stream<number>> = []
 
 	private readonly shortcuts: Array<Shortcut>
 
@@ -142,10 +144,13 @@ export class MailViewer implements Component<MailViewerAttrs> {
 		this.handleContentBlockingOnRender()
 
 		const scrollingHeader = styles.isSingleColumnLayout()
+		const mailTopSteam: stream<number> = stream(0)
+		this.topScrollValues.push(mailTopSteam)
 		return [
 			m("#mail-viewer.fill-absolute" + (scrollingHeader ? ".scroll-no-overlay.overflow-x-hidden" : ".flex.flex-column"), {
 				onscroll: function(e: Event) {
 					_self!.topScrollValue = this.scrollTop
+					mailTopSteam(this.scrollTop)
 					console.log("scroll", this.scrollTop)
 					// Prevent auto-redraw
 					// @ts-ignore
@@ -230,7 +235,7 @@ export class MailViewer implements Component<MailViewerAttrs> {
 				this.setDomBody(dom)
 				this.updateLineHeight(dom)
 				console.log("oncreate")
-				// this.rescale(false) //FIXME
+				this.rescale(false) //FIXME
 				this.renderShadowMailBody(sanitizedMailBody)
 			},
 			onupdate: (vnode) => {
@@ -281,7 +286,7 @@ export class MailViewer implements Component<MailViewerAttrs> {
 		wrapNode.style.transformOrigin = "top left"
 		wrapNode.appendChild(sanitizedMailBody.cloneNode(true))
 		if (client.isMobileDevice()) {
-			const pinchZoomable = new PinchZoom(wrapNode)
+			this.pinchZoomable = new PinchZoom(wrapNode, this.topScrollValues, [])
 		} else {
 			wrapNode.addEventListener("click", (event) => {
 				const href = (event.target as Element | null)?.closest("a")?.getAttribute("href") ?? null
@@ -367,7 +372,9 @@ export class MailViewer implements Component<MailViewerAttrs> {
 		} else {
 			const width = child.scrollWidth
 			const scale = containerWidth / width
-			// this.saveScale(scale)
+			// if (this.pinchZoomable) {
+			// 	this.pinchZoomable.setInitialScale(scale)
+			// }
 			const heightDiff = child.scrollHeight - child.scrollHeight * scale
 			child.style.transform = `scale(${scale})`
 			child.style.marginBottom = `${-heightDiff}px`
