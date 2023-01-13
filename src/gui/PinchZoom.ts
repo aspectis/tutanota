@@ -1,13 +1,12 @@
 import { client } from "../misc/ClientDetector.js"
 import stream from "mithril/stream"
-import {createNewContact} from "../mail/model/MailUtils.js"
 
 enum MoveDirection {
 	X,
 	Y,
 }
 
-type offsetValues = {
+type CoordinatePair = {
 	x: number
 	y: number
 }
@@ -30,12 +29,19 @@ export class PinchZoom {
 	private offsetY = -1
 	private startX = -1
 	private startY = -1
-
+	private currentX = -1
+	private currentY = -1
+	private lastOffsetX = 0 //what should be the default that can never be reached be?
+	private lastOffsetY = 0
+	private currentTransformOrigin: CoordinatePair = { x: 0, y: 0 }
+	private lastTransformOrigin: CoordinatePair = { x: 0, y: 0 }
+	private transformOriginNotInitialized = true
 
 	private topScrollValue: number = 0
 
 	constructor(
 		private readonly root: HTMLElement,
+		private readonly parent: HTMLElement,
 		private readonly topScrollValues: Array<stream<number>>,
 		private readonly leftScrollValues: Array<stream<number>>,
 	) {
@@ -102,36 +108,97 @@ export class PinchZoom {
 			const newX = ev.touches[0].pageX
 			const newY = ev.touches[0].pageY
 			if (!this.dragTouchIDs.has(ev.touches[0].identifier)) {
-				this.startX = newX - this.offsetX
-				this.startY = newY - this.offsetY
+				console.log("new touch")
 				this.dragTouchIDs = new Set<number>([ev.touches[0].identifier])
+				this.startX = newX
+				this.startY = newY
+				this.currentX = newX
+				this.currentY = newY
 			}
 
 			// if (this.offsetX !== newX && this.offsetX !== -1) {
-				this.moveBy(newX - this.startX, newY - this.startY)
+			this.moveBy(newX - this.currentX, newY - this.currentY)
+			// this.directMove(this.currentX - newX, this.currentY - newY)
 			// }
 			// if (this.offsetY !== newY && this.offsetY !== -1) {
-			// 	this.moveBy(MoveDirection.Y, newY - this.startY)
+			// 	this.moveBy(MoveDirection.Y, newY - this.currentY)
 			// }
-			this.offsetX = newX
-			this.offsetY = newY
+			// this.offsetX = newX
+			// this.offsetY = newY
+			this.currentX = newX
+			this.currentY = newY
 		}
+	}
+
+	private directMove(changeX: number, changeY: number) {
+		this.root.style.top = this.root.offsetTop - changeY + "px"
+		this.root.style.left = this.root.offsetLeft - changeX + "px"
 	}
 
 	private moveBy(changeX: number, changeY: number) {
 		// FIXME maybe combine, no need for separate direction
-		console.log(`changeBy: ${changeX}, ${changeY}`)
 		// if (direction === MoveDirection.X) {
-			// this.root.style.translate = `${changeBY / this.currentScale}px, 0px`
-			this.root.style.transform = `translate(${changeX / this.currentScale}px, ${changeY / this.currentScale}px) scale(${this.currentScale})`
+		// this.root.style.translate = `${changeBY / this.currentScale}px, 0px`
+		// this.root.style.transform = `translate(${-changeX}px, ${changeY}px) scale(${this.currentScale})`
 		// } else if (direction === MoveDirection.Y) {
-			// this.root.style.translate = `0px, ${changeBY / this.currentScale}px`
-			// this.root.style.transform = `translate(0px, ${changeBY / this.currentScale}px) scale(${this.currentScale})`
+		// this.root.style.translate = `0px, ${changeBY / this.currentScale}px`
+		// this.root.style.transform = `translate(0px, ${changeBY / this.currentScale}px) scale(${this.currentScale})`
 		// }
-		const generatedOffset = this.generateOffset()
-		this.root.style.transformOrigin = `${this.startX + generatedOffset.x}px ${this.startY + generatedOffset.y}px` // I guess not super correct //FIXME shouldn't be necessary??!
+
+		// if (this.lastOffsetY === -1 && this.lastOffsetX === -1) {
+		// 	this.lastOffsetX = this.currentX + generatedOffset.x
+		// 	this.lastOffsetY = this.currentY + generatedOffset.y
+		// } else {
+		// 	this.lastOffsetX = this.currentX + generatedOffset.x //FIXME
+		// 	this.lastOffsetY = this.currentY + generatedOffset.y
+		// }
+
+		this.updateTransformOrigin()
+		const scalingFactor = this.interpolateTransformation()
+		console.log(`scaling factor`, scalingFactor)
+		this.root.style.transformOrigin = `${this.currentTransformOrigin.x * scalingFactor}px ${this.currentTransformOrigin.y * scalingFactor}px` // I guess not super correct //FIXME shouldn't be necessary??!
 		// this.root.style.transformOrigin = "top left"
 		// this.root.style.transition = "transform 300ms ease-in-out"
+		// console.log(`changeBy: ${-changeX}, ${changeY}, current scale: ${this.currentScale}, transform origin: x=${this.currentX + generatedOffset.x}, y=${this.currentY + generatedOffset.y}`)
+	}
+
+	private interpolateTransformation(): number {
+		const inverted = this.maxScale - this.currentScale // inverted relationship
+		return Math.pow(this.minScale + inverted, 3)
+	}
+
+	private invalidBorder(): boolean {
+		if (
+			this.root.style.left > this.parent.style.left ||
+			this.root.style.right < this.parent.style.right ||
+			this.root.style.top > this.parent.style.top ||
+			this.root.style.bottom < this.parent.style.bottom
+		) {
+			return true
+		}
+		return false
+	}
+
+	private updateTransformOrigin() {
+		if (this.invalidBorder()) {
+			return
+		}
+		if (this.transformOriginNotInitialized) {
+			const generatedOffset = this.generateOffset()
+			this.currentTransformOrigin = {
+				x: this.startX + (this.startX - this.currentX) + generatedOffset.x,
+				y: this.startY + (this.startY - this.currentY) + generatedOffset.y,
+			}
+			this.lastTransformOrigin.x = this.currentTransformOrigin.x
+			this.lastTransformOrigin.y = this.currentTransformOrigin.y
+			this.transformOriginNotInitialized = false
+		} else {
+			this.currentTransformOrigin = {
+				x: this.lastTransformOrigin.x + (this.startX - this.currentX),
+				y: this.lastTransformOrigin.y + (this.startY - this.currentY),
+			}
+		}
+		console.log(`transform origin: x-${this.currentTransformOrigin.x}, y-${this.currentTransformOrigin.y}`)
 	}
 
 	private zoom(zoomModifier: number, centerX: number, centerY: number) {
@@ -176,23 +243,31 @@ export class PinchZoom {
 		// console.log("x and y", centerX, centerY)
 		// console.log(this.topScrollValue)
 		// child.style.transformOrigin = `${centerX}px ${centerY + this.topScrollValue}px` // FIXME should consider were mail body is currently placed, especially when zoomed out
-		child.style.transformOrigin = "top left" // definitely works but looks not nice
+		// child.style.transformOrigin = "top left" // definitely works but looks not nice
 		// child.style.transformOrigin = `${centerX}px ${0}px`
 		console.log("scrolltop", this.root.scrollTop)
+		// this.updateTransformOrigin()
 		child.style.transformOrigin = `${centerX + generatedOffset.x}px ${centerY + generatedOffset.y}px`
+		// child.style.transformOrigin = `${this.currentTransformOrigin.x}px ${this.currentTransformOrigin.x}px`
 		// child.style.transformBox = ""
 		child.style.transition = "transform 300ms ease-in-out"
 	}
 
-	private generateOffset(): offsetValues {
+	private generateOffset(): CoordinatePair {
+		console.log(`top scroll root: ${this.root.scrollTop}`)
 		let xOffset = 0
 		let yOffset = 0
+		// if (this.lastOffsetX === -1 || this.lastOffsetY === -1) {
 		for (const xStream of this.leftScrollValues) {
 			xOffset += xStream()
 		}
 		for (const yStream of this.topScrollValues) {
 			yOffset += yStream()
 		}
+		// 	this.lastOffsetX = xOffset
+		// 	this.lastOffsetY = yOffset
+		// }
+		// return { x: this.lastOffsetX, y: this.lastOffsetY }
 		return { x: xOffset, y: yOffset }
 	}
 
@@ -223,6 +298,9 @@ export class PinchZoom {
 	}
 
 	private removeTouches() {
+		this.lastTransformOrigin.x = this.currentTransformOrigin.x
+		this.lastTransformOrigin.y = this.currentTransformOrigin.y
 		this.pinchTouchIDs.clear()
+		this.dragTouchIDs.clear()
 	}
 }

@@ -235,8 +235,9 @@ export class MailViewer implements Component<MailViewerAttrs> {
 				this.setDomBody(dom)
 				this.updateLineHeight(dom)
 				console.log("oncreate")
+				this.topScrollValues = []
 				this.rescale(false) //FIXME
-				this.renderShadowMailBody(sanitizedMailBody)
+				this.renderShadowMailBody(sanitizedMailBody, vnode.dom as HTMLElement)
 			},
 			onupdate: (vnode) => {
 				const dom = vnode.dom as HTMLElement
@@ -250,8 +251,8 @@ export class MailViewer implements Component<MailViewerAttrs> {
 				}
 
 				console.log("onupdate")
-				this.rescale(false) //FIXME
-				if (this.currentlyRenderedMailBody !== sanitizedMailBody) this.renderShadowMailBody(sanitizedMailBody)
+				// this.rescale(false) //FIXME
+				if (this.currentlyRenderedMailBody !== sanitizedMailBody) this.renderShadowMailBody(sanitizedMailBody, vnode.dom as HTMLElement)
 			},
 			onbeforeremove: () => {
 				// Clear dom body in case there will be a new one, we want promise to be up-to-date
@@ -275,7 +276,7 @@ export class MailViewer implements Component<MailViewerAttrs> {
 	 * @param sanitizedMailBody the mail body to display
 	 * @private
 	 */
-	private renderShadowMailBody(sanitizedMailBody: DocumentFragment) {
+	private renderShadowMailBody(sanitizedMailBody: DocumentFragment, parent: HTMLElement) {
 		assertNonNull(this.shadowDomRoot)
 		while (this.shadowDomRoot.firstChild) {
 			this.shadowDomRoot.firstChild.remove()
@@ -286,7 +287,7 @@ export class MailViewer implements Component<MailViewerAttrs> {
 		wrapNode.style.transformOrigin = "top left"
 		wrapNode.appendChild(sanitizedMailBody.cloneNode(true))
 		if (client.isMobileDevice()) {
-			this.pinchZoomable = new PinchZoom(wrapNode, this.topScrollValues, [])
+			this.pinchZoomable = new PinchZoom(wrapNode, parent, this.topScrollValues, [])
 		} else {
 			wrapNode.addEventListener("click", (event) => {
 				const href = (event.target as Element | null)?.closest("a")?.getAttribute("href") ?? null
