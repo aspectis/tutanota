@@ -14,7 +14,6 @@ import { logins } from "../api/main/LoginController.js"
 import { Icon } from "../gui/base/Icon.js"
 import { Icons } from "../gui/base/icons/Icons.js"
 import { BootIcons } from "../gui/base/icons/BootIcons.js"
-import { header } from "../gui/Header.js"
 import type { EntityUpdateData } from "../api/main/EventController.js"
 import { isUpdateForTypeRef } from "../api/main/EventController.js"
 import { Button, ButtonType } from "../gui/base/Button.js"
@@ -23,9 +22,9 @@ import { elementIdPart, GENERATED_MAX_ID } from "../api/common/utils/EntityUtils
 import { ListColumnWrapper } from "../gui/ListColumnWrapper.js"
 import { assertMainOrNode } from "../api/common/Env.js"
 import { locator } from "../api/main/MainLocator.js"
-import Stream from "mithril/stream"
 import { showNotAvailableForFreeDialog } from "../misc/SubscriptionDialogs.js"
 import * as AddUserDialog from "./AddUserDialog.js"
+import Stream from "mithril/stream"
 
 assertMainOrNode()
 const className = "user-list"
@@ -95,13 +94,12 @@ export class UserListView implements UpdatableSettingsViewer {
 		})
 
 		this.list.loadInitial()
-		const searchBar = neverNull(header.searchBar)
 
 		this.listId.getAsync().then((listId) => {
-			searchBar.setGroupInfoRestrictionListId(listId)
+			locator.search.setGroupInfoRestrictionListId(listId)
 		})
 
-		this.searchResultStreamDependency = searchBar.lastSelectedGroupInfoResult.map((groupInfo) => {
+		this.searchResultStreamDependency = locator.search.lastSelectedGroupInfoResult.map((groupInfo) => {
 			if (this.listId.isLoaded() && this.listId.getSync() === groupInfo._id[0]) {
 				this.list.scrollToIdAndSelect(groupInfo._id[1])
 			}

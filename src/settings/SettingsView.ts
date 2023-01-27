@@ -5,7 +5,7 @@ import { ColumnType, ViewColumn } from "../gui/base/ViewColumn"
 import { ViewSlider } from "../gui/nav/ViewSlider.js"
 import { SettingsFolder } from "./SettingsFolder"
 import { lang } from "../misc/LanguageViewModel"
-import { BaseHeaderAttrs, header } from "../gui/Header.js"
+import { BaseHeaderAttrs, Header } from "../gui/Header.js"
 import { LoginSettingsViewer } from "./login/LoginSettingsViewer.js"
 import { GlobalSettingsViewer } from "./GlobalSettingsViewer"
 import { DesktopSettingsViewer } from "./DesktopSettingsViewer"
@@ -390,7 +390,7 @@ export class SettingsView extends BaseTopLevelView implements TopLevelView<Setti
 		return m(
 			"#settings.main-view",
 			m(this.viewSlider, {
-				header: m(header, {
+				header: m(Header, {
 					viewSlider: this.viewSlider,
 					...attrs.header,
 				}),

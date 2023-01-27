@@ -32,7 +32,7 @@ import { Icons } from "../../gui/base/icons/Icons"
 import { logins } from "../../api/main/LoginController"
 import { PageSize } from "../../gui/base/List"
 import { MultiSelectionBar } from "../../gui/base/MultiSelectionBar"
-import { BaseHeaderAttrs, header } from "../../gui/Header.js"
+import { BaseHeaderAttrs, Header } from "../../gui/Header.js"
 import type { EntityUpdateData } from "../../api/main/EventController"
 import { isUpdateForTypeRef } from "../../api/main/EventController"
 import { getStartOfTheWeekOffsetForUser } from "../../calendar/date/CalendarUtils"
@@ -169,14 +169,12 @@ export class SearchView extends BaseTopLevelView implements TopLevelView<SearchV
 
 		this.oncreate = (vnode) => {
 			keyManager.registerShortcuts(shortcuts)
-			neverNull(header.searchBar).setReturnListener(() => this.resultListColumn.focus())
 			locator.eventController.addEntityListener(this.entityListener)
 			this.mailboxSubscription = locator.mailModel.mailboxDetails.map((mailboxes) => this.onMailboxesChanged(mailboxes))
 		}
 
 		this.onremove = () => {
 			keyManager.unregisterShortcuts(shortcuts)
-			neverNull(header.searchBar).setReturnListener(noOp)
 			locator.eventController.removeEntityListener(this.entityListener)
 			this.mailboxSubscription?.end(true)
 		}
@@ -220,10 +218,11 @@ export class SearchView extends BaseTopLevelView implements TopLevelView<SearchV
 		return m(
 			"#search.main-view",
 			m(this.viewSlider, {
-				header: m(header, {
+				header: m(Header, {
 					headerView: this.renderHeaderView(),
 					rightView: this.renderHeaderRightView(),
 					viewSlider: this.viewSlider,
+					searchBarReturnListener: () => this.resultListColumn.focus(),
 					...attrs.header,
 				}),
 				bottomNav:

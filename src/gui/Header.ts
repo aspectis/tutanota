@@ -1,8 +1,7 @@
-import m, { Children, Component, Vnode } from "mithril"
+import m, { Children, ClassComponent, Vnode } from "mithril"
 import { NavBar } from "./base/NavBar.js"
 import { NavButton, NavButtonColor } from "./base/NavButton.js"
 import { styles } from "./styles.js"
-import { neverNull } from "@tutao/tutanota-utils"
 import type { Shortcut } from "../misc/KeyManager.js"
 import { keyManager } from "../misc/KeyManager.js"
 import { lang } from "../misc/LanguageViewModel.js"
@@ -11,7 +10,7 @@ import { theme } from "./theme.js"
 import { FeatureType, Keys } from "../api/common/TutanotaConstants.js"
 import { px, size as sizes } from "./size.js"
 import { BootIcons } from "./base/icons/BootIcons.js"
-import type { SearchBar } from "../search/SearchBar.js"
+import { SearchBar } from "../search/SearchBar.js"
 import type { IMainLocator } from "../api/main/MainLocator.js"
 import { CALENDAR_PREFIX, CONTACTS_PREFIX, MAIL_PREFIX, navButtonRoutes, SEARCH_PREFIX } from "../misc/RouteChange.js"
 import { AriaLandmarks, landmarkAttrs } from "./AriaUtils.js"
@@ -39,26 +38,11 @@ export interface HeaderAttrs extends BaseHeaderAttrs {
 	rightView?: Children
 	handleBackPress?: () => boolean
 	overrideBackIcon?: "back" | "menu"
+	searchBarReturnListener?: (() => void) | null
 }
 
-export class Header implements Component<HeaderAttrs> {
-	searchBar: SearchBar | null = null
-
-	private readonly shortcuts: Shortcut[]
-
-	constructor() {
-		this.shortcuts = this.setupShortcuts()
-
-		import("../search/SearchBar.js").then(({ SearchBar }) => {
-			this.searchBar = new SearchBar()
-			m.redraw()
-		})
-
-		// we may be able to remove this when we stop creating the Header with new
-		this.view = this.view.bind(this)
-		this.onremove = this.onremove.bind(this)
-		this.oncreate = this.oncreate.bind(this)
-	}
+export class Header implements ClassComponent<HeaderAttrs> {
+	private shortcuts: Shortcut[] = this.setupShortcuts()
 
 	view({ attrs }: Vnode<HeaderAttrs>): Children {
 		// Do not return undefined if headerView is not present
@@ -100,20 +84,21 @@ export class Header implements Component<HeaderAttrs> {
 			".header-right.pr-l.mr-negative-m.flex-end.items-center",
 			logins.isAtLeastPartiallyLoggedIn()
 				? [
-						this.renderDesktopSearchBar(),
+						this.renderDesktopSearchBar(attrs),
 						m(OfflineIndicatorDesktop, attrs.offlineIndicatorModel.getCurrentAttrs()),
 						m(".nav-bar-spacer"),
 						m(NavBar, this.renderButtons(attrs)),
 				  ]
-				: [this.renderDesktopSearchBar(), m(NavBar, this.renderButtons(attrs))],
+				: [this.renderDesktopSearchBar(attrs), m(NavBar, this.renderButtons(attrs))],
 		)
 	}
 
-	private renderDesktopSearchBar(): Children {
-		return this.searchBar && this.desktopSearchBarVisible()
-			? m(this.searchBar, {
+	private renderDesktopSearchBar(attrs: HeaderAttrs): Children {
+		return this.desktopSearchBarVisible()
+			? m(SearchBar, {
 					spacer: true,
 					placeholder: this.searchPlaceholder(),
+					returnListener: attrs.searchBarReturnListener,
 			  })
 			: null
 	}
@@ -161,7 +146,6 @@ export class Header implements Component<HeaderAttrs> {
 		let route = m.route.get()
 		let locator: IMainLocator | null = window.tutao.locator
 		return (
-			this.searchBar != null &&
 			locator != null &&
 			!locator.search.indexState().initializing &&
 			styles.isUsingBottomNavigation() &&
@@ -254,7 +238,7 @@ export class Header implements Component<HeaderAttrs> {
 			placeholder = null
 		}
 
-		return m(neverNull(this.searchBar), {
+		return m(SearchBar, {
 			alwaysExpanded: true,
 			classes: ".flex-center",
 			placeholder,
@@ -354,7 +338,6 @@ export class Header implements Component<HeaderAttrs> {
 		let route = m.route.get()
 		let locator: IMainLocator | null = window.tutao.locator
 		return (
-			this.searchBar != null &&
 			locator != null &&
 			!locator.search.indexState().initializing &&
 			styles.isDesktopLayout() &&
@@ -376,5 +359,3 @@ export class Header implements Component<HeaderAttrs> {
 function isNotTemporary(): boolean {
 	return logins.isUserLoggedIn() && logins.getUserController().sessionType !== SessionType.Temporary
 }
-
-export const header: Header = new Header()

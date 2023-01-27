@@ -14,10 +14,9 @@ import { Checkbox } from "../gui/base/Checkbox.js"
 import { logins } from "../api/main/LoginController"
 import { MessageBox } from "../gui/base/MessageBox.js"
 import { renderInfoLinks } from "./LoginView"
-import { BaseHeaderAttrs, header } from "../gui/Header.js"
+import { BaseHeaderAttrs, Header } from "../gui/Header.js"
 import { GENERATED_MIN_ID } from "../api/common/utils/EntityUtils"
 import { getLoginErrorMessage, handleExpectedLoginError } from "../misc/LoginUtils"
-import { locator } from "../api/main/MainLocator"
 import type { CredentialsProvider } from "../misc/credentials/CredentialsProvider.js"
 import { assertMainOrNode } from "../api/common/Env"
 import type { Credentials } from "../misc/credentials/Credentials"
@@ -197,7 +196,7 @@ export class ExternalLoginView extends BaseTopLevelView implements TopLevelView<
 
 	view({ attrs }: Vnode<ExternalLoginViewAttrs>): Children {
 		return m(".main-view", [
-			m(header, {
+			m(Header, {
 				viewSlider: null,
 				...attrs.header,
 			}),

@@ -8,7 +8,7 @@ import { isSelectedPrefix } from "../../gui/base/NavButton.js"
 import { MailViewer } from "./MailViewer"
 import { Dialog } from "../../gui/base/Dialog"
 import { FeatureType, Keys, MailFolderType } from "../../api/common/TutanotaConstants"
-import { BaseHeaderAttrs, header } from "../../gui/Header.js"
+import { BaseHeaderAttrs, Header } from "../../gui/Header.js"
 import type { Mail, MailFolder } from "../../api/entities/tutanota/TypeRefs.js"
 import { assertNotNull, defer, getFirstOrThrow, noOp, ofClass } from "@tutao/tutanota-utils"
 import { MailListView } from "./MailListView"
@@ -214,7 +214,7 @@ export class MailView extends BaseTopLevelView implements TopLevelView<MailViewA
 				},
 			},
 			m(this.viewSlider, {
-				header: m(header, {
+				header: m(Header, {
 					headerView: this.renderHeaderView(),
 					rightView: this.renderHeaderRightView(),
 					viewSlider: this.viewSlider,
