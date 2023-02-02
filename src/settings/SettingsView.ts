@@ -43,7 +43,7 @@ import { KnowledgeBaseListView } from "./KnowledgeBaseListView"
 import { loadTemplateGroupInstances } from "../templates/model/TemplatePopupModel"
 import type { TemplateGroupInstance } from "../templates/model/TemplateGroupModel"
 import { showGroupSharingDialog } from "../sharing/view/GroupSharingDialog"
-import { createMoreActionButtonAttrs, getConfirmation } from "../gui/base/GuiUtils"
+import { canSeeTutanotaLinks, createMoreActionButtonAttrs, getConfirmation } from "../gui/base/GuiUtils"
 import { SidebarSection } from "../gui/SidebarSection"
 import { ReceivedGroupInvitationsModel } from "../sharing/model/ReceivedGroupInvitationsModel"
 import { getDefaultGroupName, getSharedGroupName, isSharedGroupOwner } from "../sharing/GroupUtils"
@@ -63,6 +63,7 @@ import { getAvailableDomains } from "./mailaddress/MailAddressesUtils.js"
 import { DrawerMenuAttrs } from "../gui/nav/DrawerMenu.js"
 import { BaseTopLevelView } from "../gui/BaseTopLevelView.js"
 import { TopLevelAttrs, TopLevelView } from "../TopLevelView.js"
+import { ReferralSettingsViewer } from "./ReferralSettingsViewer.js"
 
 assertMainOrNode()
 
@@ -125,6 +126,18 @@ export class SettingsView extends BaseTopLevelView implements TopLevelView<Setti
 				undefined,
 			),
 		]
+
+		if (canSeeTutanotaLinks()) {
+			this._userFolders.push(
+				new SettingsFolder(
+					"referralSettings_label",
+					() => BootIcons.Share,
+					"referral",
+					() => new ReferralSettingsViewer(),
+					undefined,
+				),
+			)
+		}
 
 		if (isDesktop()) {
 			this._userFolders.push(

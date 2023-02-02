@@ -52,6 +52,8 @@ import {PremiumFeatureReturnTypeRef} from "./TypeRefs.js"
 import {PriceServiceDataTypeRef} from "./TypeRefs.js"
 import {PriceServiceReturnTypeRef} from "./TypeRefs.js"
 import {PublicKeyDataTypeRef} from "./TypeRefs.js"
+import {ReferralCodePostInTypeRef} from "./TypeRefs.js"
+import {ReferralCodePostOutTypeRef} from "./TypeRefs.js"
 import {RegistrationCaptchaServiceGetDataTypeRef} from "./TypeRefs.js"
 import {RegistrationCaptchaServiceReturnTypeRef} from "./TypeRefs.js"
 import {RegistrationCaptchaServiceDataTypeRef} from "./TypeRefs.js"
@@ -324,6 +326,15 @@ export const PublicKeyService = Object.freeze({
 	name: "PublicKeyService",
 	get: {data: PublicKeyDataTypeRef, return: PublicKeyReturnTypeRef},
 	post: null,
+	put: null,
+	delete: null,
+} as const)
+
+export const ReferralCodeService = Object.freeze({
+	app: "sys",
+	name: "ReferralCodeService",
+	get: null,
+	post: {data: ReferralCodePostInTypeRef, return: ReferralCodePostOutTypeRef},
 	put: null,
 	delete: null,
 } as const)

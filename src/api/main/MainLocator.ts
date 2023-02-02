@@ -559,6 +559,10 @@ class MainLocator {
 				case "pinBiometrics":
 					const { PinBiometricsNews } = await import("../../misc/news/items/PinBiometricsNews.js")
 					return new PinBiometricsNews(this.newsModel, this.credentialsProvider, logins.getUserController().userId)
+				case "referralLink":
+					const { ReferralLinkNews } = await import("../../misc/news/items/ReferralLinkNews.js")
+					const dateProvider = await this.noZoneDateProvider()
+					return new ReferralLinkNews(this.newsModel, dateProvider, logins.getUserController().userId)
 				default:
 					console.log(`No implementation for news named '${name}'`)
 					return null

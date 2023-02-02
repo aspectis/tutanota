@@ -686,7 +686,6 @@ export default {
 		"invalidTimePeriod_msg": "The entered time period is invalid.",
 		"invalidVatIdNumber_msg": "The value added tax identification number (VAT-ID) is invalid.",
 		"invalidVatIdValidationFailed_msg": "Failed to validate the value added tax identification number. Please try again later.",
-		"invitationMailBody_msg": "Hi!<br><br>I have switched to Tutanota, the world's most secure email service, easy to use, open-source and private by design. It's ad-free and powered by 100% renewable electricity.<br><br>Now, I would like to invite you to Tutanota as well! If you sign up with my personal invite link, you will get an additional free month on any yearly subscription:<br>{registrationLink}<br><br><br>Best regards,<br>{username}<br><br>PS: You can also get a Free membership and upgrade later.",
 		"invitationMailSubject_msg": "My new email address - join Tutanota so we can take back our privacy",
 		"invitation_label": "Invitation",
 		"invitedToEvent_msg": "You have been invited to take part in this event. Do you want to attend?",
@@ -1609,6 +1608,12 @@ export default {
 		"yourCalendars_label": "Your calendars",
 		"yourFolders_action": "YOUR FOLDERS",
 		"yourMessage_label": "Your message",
-		"you_label": "You"
+		"you_label": "You",
+		"referralSettings_label": "Refer a friend",
+		"referralLink_label": "Referral link",
+		"referralLinkShare_msg": "Join Tutanota now at: {referralLink}",
+		"referralLinkLong_msg": "You can refer friends to Tutanota. If they sign up with your personal referral link, you will receive 25% of their first payment in credit on your account, and they will get an additional free month.",
+		"linkCopied_msg": "Copied the link to the clipboard",
+		"invitationMailBody_msg": "Hello!<br><br>This is my email address. Tutanota offers fully encrypted, ad-free mailbox, calendar and contacts to protect our right to privacy. Finally, our data belongs only to us, no-one else can access it.<br><br>Join Tutanota now! If you sign up with my personal invite link, you will get an additional free month:<br>{registrationLink}<br><br><br>Best regards,<br>{username}<br><br>PS: Tutanota is free of charge with 1 GB of free storage included. In addition, it is open source: {githubLink}"
 	}
 }

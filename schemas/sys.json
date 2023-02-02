@@ -70,6 +70,16 @@
 					"info": "RenameAttribute BucketKey: ownerEncBucketKey -> groupEncBucketKey."
 				}
 			]
+		},
+		{
+			"version": 84,
+			"changes": [
+				{
+					"name": "AddAssociation",
+					"sourceType": "User",
+					"info": "AddAssociation User/referralCode/ELEMENT_ASSOCIATION/2062."
+				}
+			]
 		}
 	]
 }

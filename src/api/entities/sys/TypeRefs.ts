@@ -2185,6 +2185,30 @@ export type RecoverCode = {
 	userEncRecoverCode: Uint8Array;
 	verifier: Uint8Array;
 }
+export const ReferralCodePostInTypeRef: TypeRef<ReferralCodePostIn> = new TypeRef("sys", "ReferralCodePostIn")
+
+export function createReferralCodePostIn(values?: Partial<ReferralCodePostIn>): ReferralCodePostIn {
+	return Object.assign(create(typeModels.ReferralCodePostIn, ReferralCodePostInTypeRef), values)
+}
+
+export type ReferralCodePostIn = {
+	_type: TypeRef<ReferralCodePostIn>;
+
+	_format: NumberString;
+}
+export const ReferralCodePostOutTypeRef: TypeRef<ReferralCodePostOut> = new TypeRef("sys", "ReferralCodePostOut")
+
+export function createReferralCodePostOut(values?: Partial<ReferralCodePostOut>): ReferralCodePostOut {
+	return Object.assign(create(typeModels.ReferralCodePostOut, ReferralCodePostOutTypeRef), values)
+}
+
+export type ReferralCodePostOut = {
+	_type: TypeRef<ReferralCodePostOut>;
+
+	_format: NumberString;
+
+	referralCode: Id;
+}
 export const RegistrationCaptchaServiceDataTypeRef: TypeRef<RegistrationCaptchaServiceData> = new TypeRef("sys", "RegistrationCaptchaServiceData")
 
 export function createRegistrationCaptchaServiceData(values?: Partial<RegistrationCaptchaServiceData>): RegistrationCaptchaServiceData {
@@ -2834,6 +2858,7 @@ export type User = {
 	memberships: GroupMembership[];
 	phoneNumbers: PhoneNumber[];
 	pushIdentifierList:  null | PushIdentifierList;
+	referralCode:  null | Id;
 	secondFactorAuthentications: Id;
 	successfulLogins: Id;
 	userGroup: GroupMembership;
