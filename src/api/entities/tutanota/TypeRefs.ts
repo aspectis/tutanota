@@ -1109,6 +1109,159 @@ export type ImapSyncState = {
 
 	folders: ImapFolder[];
 }
+export const ImportImapAccountTypeRef: TypeRef<ImportImapAccount> = new TypeRef("tutanota", "ImportImapAccount")
+
+export function createImportImapAccount(values?: Partial<ImportImapAccount>): ImportImapAccount {
+	return Object.assign(create(typeModels.ImportImapAccount, ImportImapAccountTypeRef), values)
+}
+
+export type ImportImapAccount = {
+	_type: TypeRef<ImportImapAccount>;
+
+	_id: Id;
+	accessToken: null | string;
+	host: string;
+	password: null | string;
+	port: NumberString;
+	userName: string;
+}
+export const ImportImapAccountSyncStateTypeRef: TypeRef<ImportImapAccountSyncState> = new TypeRef("tutanota", "ImportImapAccountSyncState")
+
+export function createImportImapAccountSyncState(values?: Partial<ImportImapAccountSyncState>): ImportImapAccountSyncState {
+	return Object.assign(create(typeModels.ImportImapAccountSyncState, ImportImapAccountSyncStateTypeRef), values)
+}
+
+export type ImportImapAccountSyncState = {
+	_type: TypeRef<ImportImapAccountSyncState>;
+	_errors: Object;
+
+	_format: NumberString;
+	_id: Id;
+	_ownerEncSessionKey: null | Uint8Array;
+	_ownerGroup: null | Id;
+	_permissions: Id;
+	maxQuota: NumberString;
+	postponedUntil: NumberString;
+
+	imapAccount: ImportImapAccount;
+	imapFolderSyncStates: Id;
+}
+export const ImportImapDeleteInTypeRef: TypeRef<ImportImapDeleteIn> = new TypeRef("tutanota", "ImportImapDeleteIn")
+
+export function createImportImapDeleteIn(values?: Partial<ImportImapDeleteIn>): ImportImapDeleteIn {
+	return Object.assign(create(typeModels.ImportImapDeleteIn, ImportImapDeleteInTypeRef), values)
+}
+
+export type ImportImapDeleteIn = {
+	_type: TypeRef<ImportImapDeleteIn>;
+	_errors: Object;
+
+	_format: NumberString;
+
+	imapAccountSyncState: Id;
+}
+export const ImportImapFolderSyncStateTypeRef: TypeRef<ImportImapFolderSyncState> = new TypeRef("tutanota", "ImportImapFolderSyncState")
+
+export function createImportImapFolderSyncState(values?: Partial<ImportImapFolderSyncState>): ImportImapFolderSyncState {
+	return Object.assign(create(typeModels.ImportImapFolderSyncState, ImportImapFolderSyncStateTypeRef), values)
+}
+
+export type ImportImapFolderSyncState = {
+	_type: TypeRef<ImportImapFolderSyncState>;
+	_errors: Object;
+
+	_format: NumberString;
+	_id: IdTuple;
+	_ownerEncSessionKey: null | Uint8Array;
+	_ownerGroup: null | Id;
+	_permissions: Id;
+	highestmodseq: NumberString;
+	path: string;
+	uidnext: NumberString;
+	uidvalidity: NumberString;
+
+	importedImapUidToMailMap: Id;
+	mailFolder: IdTuple;
+}
+export const ImportImapPostInTypeRef: TypeRef<ImportImapPostIn> = new TypeRef("tutanota", "ImportImapPostIn")
+
+export function createImportImapPostIn(values?: Partial<ImportImapPostIn>): ImportImapPostIn {
+	return Object.assign(create(typeModels.ImportImapPostIn, ImportImapPostInTypeRef), values)
+}
+
+export type ImportImapPostIn = {
+	_type: TypeRef<ImportImapPostIn>;
+	_errors: Object;
+
+	_format: NumberString;
+	mailGroup: Id;
+	maxQuota: NumberString;
+	ownerEncImapAccountSyncStateSessionKey: Uint8Array;
+
+	imapAccount: ImportImapAccount;
+}
+export const ImportImapPostOutTypeRef: TypeRef<ImportImapPostOut> = new TypeRef("tutanota", "ImportImapPostOut")
+
+export function createImportImapPostOut(values?: Partial<ImportImapPostOut>): ImportImapPostOut {
+	return Object.assign(create(typeModels.ImportImapPostOut, ImportImapPostOutTypeRef), values)
+}
+
+export type ImportImapPostOut = {
+	_type: TypeRef<ImportImapPostOut>;
+
+	_format: NumberString;
+
+	imapAccountSyncState: Id;
+}
+export const ImportImapUidToMailTypeRef: TypeRef<ImportImapUidToMail> = new TypeRef("tutanota", "ImportImapUidToMail")
+
+export function createImportImapUidToMail(values?: Partial<ImportImapUidToMail>): ImportImapUidToMail {
+	return Object.assign(create(typeModels.ImportImapUidToMail, ImportImapUidToMailTypeRef), values)
+}
+
+export type ImportImapUidToMail = {
+	_type: TypeRef<ImportImapUidToMail>;
+
+	_format: NumberString;
+	_id: IdTuple;
+	_ownerGroup: null | Id;
+	_permissions: Id;
+
+	mail: IdTuple;
+}
+export const ImportMailPostInTypeRef: TypeRef<ImportMailPostIn> = new TypeRef("tutanota", "ImportMailPostIn")
+
+export function createImportMailPostIn(values?: Partial<ImportMailPostIn>): ImportMailPostIn {
+	return Object.assign(create(typeModels.ImportMailPostIn, ImportMailPostInTypeRef), values)
+}
+
+export type ImportMailPostIn = {
+	_type: TypeRef<ImportMailPostIn>;
+	_errors: Object;
+
+	_format: NumberString;
+	imapUid: NumberString;
+	ownerEncSessionKey: Uint8Array;
+	previousMessageId: null | string;
+	replyType: NumberString;
+	state: NumberString;
+
+	imapFolderSyncState: IdTuple;
+	mailData: DraftData;
+}
+export const ImportMailPostOutTypeRef: TypeRef<ImportMailPostOut> = new TypeRef("tutanota", "ImportMailPostOut")
+
+export function createImportMailPostOut(values?: Partial<ImportMailPostOut>): ImportMailPostOut {
+	return Object.assign(create(typeModels.ImportMailPostOut, ImportMailPostOutTypeRef), values)
+}
+
+export type ImportMailPostOut = {
+	_type: TypeRef<ImportMailPostOut>;
+
+	_format: NumberString;
+
+	mail: IdTuple;
+}
 export const InboxRuleTypeRef: TypeRef<InboxRule> = new TypeRef("tutanota", "InboxRule")
 
 export function createInboxRule(values?: Partial<InboxRule>): InboxRule {
@@ -1470,6 +1623,7 @@ export type MailboxGroupRoot = {
 
 	calendarEventUpdates:  null | CalendarEventUpdateList;
 	contactFormUserContactForm:  null | IdTuple;
+	importImapAccountSyncState:  null | Id;
 	mailbox: Id;
 	mailboxProperties:  null | Id;
 	outOfOfficeNotification:  null | Id;
