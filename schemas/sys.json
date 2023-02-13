@@ -78,6 +78,11 @@
 					"name": "AddAssociation",
 					"sourceType": "User",
 					"info": "AddAssociation User/referralCode/ELEMENT_ASSOCIATION/2062."
+				},
+				{
+					"name": "AddAssociation",
+					"sourceType": "CustomerInfo",
+					"info": "AddAssociation CustomerInfo/referredBy/ELEMENT_ASSOCIATION/2073."
 				}
 			]
 		}

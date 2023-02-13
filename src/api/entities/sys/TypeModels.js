@@ -3596,6 +3596,16 @@ export const typeModels = {
                 "refType": "GiftCardsRef",
                 "dependency": null
             },
+            "referredBy": {
+                "final": false,
+                "name": "referredBy",
+                "id": 2073,
+                "since": 84,
+                "type": "ELEMENT_ASSOCIATION",
+                "cardinality": "ZeroOrOne",
+                "refType": "Customer",
+                "dependency": null
+            },
             "takeoverCustomer": {
                 "final": false,
                 "name": "takeoverCustomer",
@@ -8776,6 +8786,40 @@ export const typeModels = {
         "app": "sys",
         "version": "84"
     },
+    "ReferralCodeGetIn": {
+        "name": "ReferralCodeGetIn",
+        "since": 84,
+        "type": "DATA_TRANSFER_TYPE",
+        "id": 2063,
+        "rootId": "A3N5cwAIDw",
+        "versioned": false,
+        "encrypted": false,
+        "values": {
+            "_format": {
+                "final": false,
+                "name": "_format",
+                "id": 2064,
+                "since": 84,
+                "type": "Number",
+                "cardinality": "One",
+                "encrypted": false
+            }
+        },
+        "associations": {
+            "referralCode": {
+                "final": false,
+                "name": "referralCode",
+                "id": 2065,
+                "since": 84,
+                "type": "ELEMENT_ASSOCIATION",
+                "cardinality": "One",
+                "refType": "ReferralCode",
+                "dependency": null
+            }
+        },
+        "app": "sys",
+        "version": "84"
+    },
     "ReferralCodePostIn": {
         "name": "ReferralCodePostIn",
         "since": 84,
@@ -8803,15 +8847,15 @@ export const typeModels = {
         "name": "ReferralCodePostOut",
         "since": 84,
         "type": "DATA_TRANSFER_TYPE",
-        "id": 2063,
-        "rootId": "A3N5cwAIDw",
+        "id": 2068,
+        "rootId": "A3N5cwAIFA",
         "versioned": false,
         "encrypted": false,
         "values": {
             "_format": {
                 "final": false,
                 "name": "_format",
-                "id": 2064,
+                "id": 2069,
                 "since": 84,
                 "type": "Number",
                 "cardinality": "One",
@@ -8822,7 +8866,7 @@ export const typeModels = {
             "referralCode": {
                 "final": false,
                 "name": "referralCode",
-                "id": 2065,
+                "id": 2070,
                 "since": 84,
                 "type": "ELEMENT_ASSOCIATION",
                 "cardinality": "One",
@@ -10384,8 +10428,8 @@ export const typeModels = {
         "app": "sys",
         "version": "84"
     },
-    "SwitchAccountTypeData": {
-        "name": "SwitchAccountTypeData",
+    "SwitchAccountTypePostIn": {
+        "name": "SwitchAccountTypePostIn",
         "since": 9,
         "type": "DATA_TRANSFER_TYPE",
         "id": 772,
@@ -10430,7 +10474,18 @@ export const typeModels = {
                 "encrypted": false
             }
         },
-        "associations": {},
+        "associations": {
+            "referralCode": {
+                "final": false,
+                "name": "referralCode",
+                "id": 2072,
+                "since": 84,
+                "type": "ELEMENT_ASSOCIATION",
+                "cardinality": "ZeroOrOne",
+                "refType": "ReferralCode",
+                "dependency": null
+            }
+        },
         "app": "sys",
         "version": "84"
     },

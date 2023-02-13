@@ -100,7 +100,7 @@ export class ReferralLinkViewer implements Component<ReferralLinkAttrs> {
 export async function getReferralLink(): Promise<string> {
 	const user = logins.getUserController().user
 	const referralCode = user.referralCode ? user.referralCode : await requestNewReferralCode()
-	return `https://mail.tutanota.com/signup?referral=${referralCode}`
+	return `https://mail.tutanota.com/signup?ref=${referralCode}`
 }
 
 async function requestNewReferralCode(): Promise<string> {

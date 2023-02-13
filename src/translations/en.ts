@@ -1609,6 +1609,9 @@ export default {
 		"yourCalendars_label": "Your calendars",
 		"yourFolders_action": "YOUR FOLDERS",
 		"yourMessage_label": "Your message",
-		"you_label": "You"
+		"you_label": "You",
+		"referralSignup_msg": "You are signing up with a personal referral link. You will get an additional free month if you subscribe for one year.",
+		"referralSignupInvalid_msg": "You have tried signing up with an invalid referral link. You can continue registering, but it will not apply.",
+		"referralSignupCampaignError_msg": "Not allowed to sign up with campaign code and referral code at the same time."
 	}
 }

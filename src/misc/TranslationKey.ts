@@ -1595,3 +1595,7 @@ export type TranslationKeyType =
 	| "yourMessage_label"
 	| "you_label"
 	| "emptyString_msg"
+	// TODO
+	| "referralSignup_msg"
+	| "referralSignupInvalid_msg"
+	| "referralSignupCampaignError_msg"
