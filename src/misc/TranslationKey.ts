@@ -1595,8 +1595,3 @@ export type TranslationKeyType =
 	| "yourMessage_label"
 	| "you_label"
 	| "emptyString_msg"
-	| "referralSettings_label"
-	| "referralLink_label"
-	| "referralLinkShare_msg"
-	| "referralLinkLong_msg"
-	| "linkCopied_msg"

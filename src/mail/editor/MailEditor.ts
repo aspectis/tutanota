@@ -1099,7 +1099,6 @@ export async function writeInviteMail(referralLink: string) {
 	const body = lang.get("invitationMailBody_msg", {
 		"{registrationLink}": referralLink,
 		"{username}": username,
-		"{githubLink}": "https://github.com/tutao/tutanota",
 	})
 	const dialog = await newMailEditorFromTemplate(detailsProperties.mailboxDetails, {}, lang.get("invitationMailSubject_msg"), body, [], false)
 	dialog.show()
