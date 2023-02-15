@@ -19,9 +19,6 @@ assertWorkerOrNode()
  * Read access tokens for archives are cached, but tokens for reading specific blobs are not cached.
  */
 export class BlobAccessTokenFacade {
-	// We avoid sending tokens that are just about to expire.
-	private readonly TOKEN_EXPIRATION_MARGIN_MS = 30000
-
 	private readonly serviceExecutor: IServiceExecutor
 	private readonly readCache: Map<Id, BlobServerAccessInfo>
 	private readonly writeCache: Map<ArchiveDataType, Map<Id, BlobServerAccessInfo>>
@@ -92,7 +89,7 @@ export class BlobAccessTokenFacade {
 	 */
 	async requestReadTokenArchive(archiveDataType: ArchiveDataType | null, archiveId: Id): Promise<BlobServerAccessInfo> {
 		const cachedBlobServerAccessInfo = this.readCache.get(archiveId)
-		if (cachedBlobServerAccessInfo != null && this.isValid(cachedBlobServerAccessInfo)) {
+		if (cachedBlobServerAccessInfo != null && this.canBeUsedForAnotherRequest(cachedBlobServerAccessInfo)) {
 			return cachedBlobServerAccessInfo
 		}
 
@@ -108,15 +105,15 @@ export class BlobAccessTokenFacade {
 		return blobAccessInfo
 	}
 
-	private isValid(blobServerAccessInfo: BlobServerAccessInfo): boolean {
-		return blobServerAccessInfo.expires.getTime() > this.dateProvider.now() + this.TOKEN_EXPIRATION_MARGIN_MS
+	private canBeUsedForAnotherRequest(blobServerAccessInfo: BlobServerAccessInfo): boolean {
+		return blobServerAccessInfo.expires.getTime() > this.dateProvider.now()
 	}
 
 	private getValidTokenFromWriteCache(archiveDataType: ArchiveDataType, ownerGroupId: Id): BlobServerAccessInfo | null {
 		const cacheForArchiveDataType = this.writeCache.get(archiveDataType)
 		if (cacheForArchiveDataType != null) {
 			let cachedBlobServerAccessInfo = cacheForArchiveDataType.get(ownerGroupId)
-			if (cachedBlobServerAccessInfo != null && this.isValid(cachedBlobServerAccessInfo)) {
+			if (cachedBlobServerAccessInfo != null && this.canBeUsedForAnotherRequest(cachedBlobServerAccessInfo)) {
 				return cachedBlobServerAccessInfo
 			}
 		}
