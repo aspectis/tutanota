@@ -1,10 +1,11 @@
 import { assertWorkerOrNode, getApiOrigin, isAdminClient, isAndroidApp, isWebClient, isWorker } from "../../common/Env"
 import { ConnectionError, handleRestError, PayloadTooLargeError, ServiceUnavailableError, TooManyRequestsError } from "../../common/error/RestError"
 import { HttpMethod, MediaType } from "../../common/EntityFunctions"
-import { assertNotNull, typedEntries, uint8ArrayToArrayBuffer } from "@tutao/tutanota-utils"
+import { assertNotNull, LazyLoaded, neverNull, typedEntries, uint8ArrayToArrayBuffer } from "@tutao/tutanota-utils"
 import { SuspensionHandler } from "../SuspensionHandler"
 import { REQUEST_SIZE_LIMIT_DEFAULT, REQUEST_SIZE_LIMIT_MAP } from "../../common/TutanotaConstants"
 import { SuspensionError } from "../../common/error/SuspensionError.js"
+import { BlobServerAccessInfo } from "../../entities/storage/TypeRefs.js"
 
 assertWorkerOrNode()
 
@@ -21,6 +22,11 @@ export const enum SuspensionBehavior {
 	Throw,
 }
 
+export type BlobAccessParams = {
+	queryParams: Dict
+	blobAccessInfo: BlobServerAccessInfo
+}
+
 export interface RestClientOptions {
 	body?: string | Uint8Array
 	responseType?: MediaType
@@ -28,6 +34,7 @@ export interface RestClientOptions {
 	baseUrl?: string
 	headers?: Dict
 	queryParams?: Dict
+	blobAccessParams?: LazyLoaded<BlobAccessParams>
 	noCORS?: boolean
 	/** Default is to suspend all requests on rate limit. */
 	suspensionBehavior?: SuspensionBehavior
@@ -62,8 +69,19 @@ export class RestClient {
 		if (this.suspensionHandler.isSuspended()) {
 			return this.suspensionHandler.deferRequest(() => this.request(path, method, options))
 		} else {
-			return new Promise((resolve, reject) => {
+			return new Promise(async (resolve, reject) => {
 				this.id++
+
+				if (options.blobAccessParams) {
+					const blobAccessParams = options.blobAccessParams.getSync()
+					if (blobAccessParams && blobAccessParams.blobAccessInfo.expires < new Date()) {
+						console.log("expired access token")
+						await options.blobAccessParams.reload()
+					}
+					options.queryParams = neverNull(options.blobAccessParams.getSync()).queryParams
+					console.log("Set query params for blob request", options.queryParams)
+				}
+
 				if (!options.queryParams) {
 					options.queryParams = {}
 				}

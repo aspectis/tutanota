@@ -1,6 +1,6 @@
-import { addParamsToUrl, isSuspensionResponse, RestClient } from "../../rest/RestClient.js"
+import { addParamsToUrl, BlobAccessParams, isSuspensionResponse, RestClient } from "../../rest/RestClient.js"
 import { CryptoFacade, encryptBytes } from "../../crypto/CryptoFacade.js"
-import { concat, neverNull, promiseMap, splitUint8ArrayInChunks, uint8ArrayToBase64, uint8ArrayToString } from "@tutao/tutanota-utils"
+import { concat, lazyAsync, LazyLoaded, neverNull, promiseMap, splitUint8ArrayInChunks, uint8ArrayToBase64, uint8ArrayToString } from "@tutao/tutanota-utils"
 import { ArchiveDataType, MAX_BLOB_SIZE_BYTES } from "../../../common/TutanotaConstants.js"
 
 import { HttpMethod, MediaType, resolveTypeReference } from "../../../common/EntityFunctions.js"
@@ -77,9 +77,10 @@ export class BlobFacade {
 		ownerGroupId: Id,
 		sessionKey: Aes128Key,
 	): Promise<BlobReferenceTokenWrapper[]> {
-		const blobAccessInfo = await this.blobAccessTokenFacade.requestWriteToken(archiveDataType, ownerGroupId)
+		const blobAccessInfoFactory = () => this.blobAccessTokenFacade.requestWriteToken(archiveDataType, ownerGroupId)
+
 		const chunks = splitUint8ArrayInChunks(MAX_BLOB_SIZE_BYTES, blobData)
-		return promiseMap(chunks, async (chunk) => await this.encryptAndUploadChunk(chunk, blobAccessInfo, sessionKey))
+		return promiseMap(chunks, async (chunk) => await this.encryptAndUploadChunk(chunk, blobAccessInfoFactory, sessionKey))
 	}
 
 	/**
@@ -172,16 +173,27 @@ export class BlobFacade {
 		}
 	}
 
-	private async encryptAndUploadChunk(chunk: Uint8Array, blobAccessInfo: BlobServerAccessInfo, sessionKey: Aes128Key): Promise<BlobReferenceTokenWrapper> {
-		const { blobAccessToken, servers } = blobAccessInfo
+	private async encryptAndUploadChunk(
+		chunk: Uint8Array,
+		blobAccessInfoFactory: lazyAsync<BlobServerAccessInfo>,
+		sessionKey: Aes128Key,
+	): Promise<BlobReferenceTokenWrapper> {
 		const encryptedData = encryptBytes(sessionKey, chunk)
-		const blobHash = uint8ArrayToBase64(sha256Hash(encryptedData).slice(0, 6))
-		const queryParams = await this.createParams({ blobAccessToken, blobHash })
+		const queryParamsFactory: LazyLoaded<BlobAccessParams> = new LazyLoaded(async () => {
+			const blobAccessInfo = await blobAccessInfoFactory()
+			const blobHash = uint8ArrayToBase64(sha256Hash(encryptedData).slice(0, 6))
+			return {
+				queryParams: await this.createParams({ blobAccessToken: blobAccessInfo.blobAccessToken, blobHash }),
+				blobAccessInfo: blobAccessInfo,
+			}
+		})
+
+		const blobAccessParams: BlobAccessParams = await queryParamsFactory.getAsync()
 		return tryServers(
-			servers,
+			blobAccessParams.blobAccessInfo.servers,
 			async (serverUrl) => {
 				const response = await this.restClient.request(BLOB_SERVICE_REST_PATH, HttpMethod.POST, {
-					queryParams,
+					blobAccessParams: queryParamsFactory,
 					body: encryptedData,
 					responseType: MediaType.Json,
 					baseUrl: serverUrl,
@@ -267,7 +279,7 @@ export class BlobFacade {
 		)
 	}
 
-	private async createParams(options: { blobAccessToken: string; blobHash?: string; _body?: string }) {
+	private async createParams(options: { blobAccessToken: string; blobHash?: string; _body?: string }): Promise<Dict> {
 		const { blobAccessToken, blobHash, _body } = options
 		const BlobGetInTypeModel = await resolveTypeReference(BlobGetInTypeRef)
 		return Object.assign(
