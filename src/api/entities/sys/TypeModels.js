@@ -2973,6 +2973,16 @@ export const typeModels = {
                 "refType": "CustomerProperties",
                 "dependency": null
             },
+            "referralCode": {
+                "final": false,
+                "name": "referralCode",
+                "id": 2061,
+                "since": 84,
+                "type": "ELEMENT_ASSOCIATION",
+                "cardinality": "ZeroOrOne",
+                "refType": "ReferralCode",
+                "dependency": null
+            },
             "rejectedSenders": {
                 "final": true,
                 "name": "rejectedSenders",
@@ -3599,7 +3609,7 @@ export const typeModels = {
             "referredBy": {
                 "final": false,
                 "name": "referredBy",
-                "id": 2073,
+                "id": 2072,
                 "since": 84,
                 "type": "ELEMENT_ASSOCIATION",
                 "cardinality": "ZeroOrOne",
@@ -8790,15 +8800,15 @@ export const typeModels = {
         "name": "ReferralCodeGetIn",
         "since": 84,
         "type": "DATA_TRANSFER_TYPE",
-        "id": 2063,
-        "rootId": "A3N5cwAIDw",
+        "id": 2062,
+        "rootId": "A3N5cwAIDg",
         "versioned": false,
         "encrypted": false,
         "values": {
             "_format": {
                 "final": false,
                 "name": "_format",
-                "id": 2064,
+                "id": 2063,
                 "since": 84,
                 "type": "Number",
                 "cardinality": "One",
@@ -8809,7 +8819,7 @@ export const typeModels = {
             "referralCode": {
                 "final": false,
                 "name": "referralCode",
-                "id": 2065,
+                "id": 2064,
                 "since": 84,
                 "type": "ELEMENT_ASSOCIATION",
                 "cardinality": "One",
@@ -8824,15 +8834,15 @@ export const typeModels = {
         "name": "ReferralCodePostIn",
         "since": 84,
         "type": "DATA_TRANSFER_TYPE",
-        "id": 2066,
-        "rootId": "A3N5cwAIEg",
+        "id": 2065,
+        "rootId": "A3N5cwAIEQ",
         "versioned": false,
         "encrypted": false,
         "values": {
             "_format": {
                 "final": false,
                 "name": "_format",
-                "id": 2067,
+                "id": 2066,
                 "since": 84,
                 "type": "Number",
                 "cardinality": "One",
@@ -8847,15 +8857,15 @@ export const typeModels = {
         "name": "ReferralCodePostOut",
         "since": 84,
         "type": "DATA_TRANSFER_TYPE",
-        "id": 2068,
-        "rootId": "A3N5cwAIFA",
+        "id": 2067,
+        "rootId": "A3N5cwAIEw",
         "versioned": false,
         "encrypted": false,
         "values": {
             "_format": {
                 "final": false,
                 "name": "_format",
-                "id": 2069,
+                "id": 2068,
                 "since": 84,
                 "type": "Number",
                 "cardinality": "One",
@@ -8866,7 +8876,7 @@ export const typeModels = {
             "referralCode": {
                 "final": false,
                 "name": "referralCode",
-                "id": 2070,
+                "id": 2069,
                 "since": 84,
                 "type": "ELEMENT_ASSOCIATION",
                 "cardinality": "One",
@@ -10478,7 +10488,7 @@ export const typeModels = {
             "referralCode": {
                 "final": false,
                 "name": "referralCode",
-                "id": 2072,
+                "id": 2071,
                 "since": 84,
                 "type": "ELEMENT_ASSOCIATION",
                 "cardinality": "ZeroOrOne",
@@ -11362,16 +11372,6 @@ export const typeModels = {
                 "type": "AGGREGATION",
                 "cardinality": "ZeroOrOne",
                 "refType": "PushIdentifierList",
-                "dependency": null
-            },
-            "referralCode": {
-                "final": false,
-                "name": "referralCode",
-                "id": 2062,
-                "since": 84,
-                "type": "ELEMENT_ASSOCIATION",
-                "cardinality": "ZeroOrOne",
-                "refType": "ReferralCode",
                 "dependency": null
             },
             "secondFactorAuthentications": {

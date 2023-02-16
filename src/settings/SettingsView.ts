@@ -43,7 +43,7 @@ import { KnowledgeBaseListView } from "./KnowledgeBaseListView"
 import { loadTemplateGroupInstances } from "../templates/model/TemplatePopupModel"
 import type { TemplateGroupInstance } from "../templates/model/TemplateGroupModel"
 import { showGroupSharingDialog } from "../sharing/view/GroupSharingDialog"
-import { canSeeTutanotaLinks, createMoreActionButtonAttrs, getConfirmation } from "../gui/base/GuiUtils"
+import { createMoreActionButtonAttrs, getConfirmation } from "../gui/base/GuiUtils"
 import { SidebarSection } from "../gui/SidebarSection"
 import { ReceivedGroupInvitationsModel } from "../sharing/model/ReceivedGroupInvitationsModel"
 import { getDefaultGroupName, getSharedGroupName, isSharedGroupOwner } from "../sharing/GroupUtils"
@@ -126,18 +126,6 @@ export class SettingsView extends BaseTopLevelView implements TopLevelView<Setti
 				undefined,
 			),
 		]
-
-		if (canSeeTutanotaLinks()) {
-			this._userFolders.push(
-				new SettingsFolder(
-					"referralSettings_label",
-					() => BootIcons.Share,
-					"referral",
-					() => new ReferralSettingsViewer(),
-					undefined,
-				),
-			)
-		}
 
 		if (isDesktop()) {
 			this._userFolders.push(
@@ -247,6 +235,16 @@ export class SettingsView extends BaseTopLevelView implements TopLevelView<Setti
 						() => new PaymentViewer(),
 						undefined,
 					).setIsVisibleHandler(() => !logins.getUserController().isFreeAccount()),
+				)
+
+				this._adminFolders.push(
+					new SettingsFolder(
+						"referralSettings_label",
+						() => BootIcons.Share,
+						"referral",
+						() => new ReferralSettingsViewer(),
+						undefined,
+					),
 				)
 			}
 		}

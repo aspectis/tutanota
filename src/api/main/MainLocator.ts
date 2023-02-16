@@ -562,7 +562,7 @@ class MainLocator {
 				case "referralLink":
 					const { ReferralLinkNews } = await import("../../misc/news/items/ReferralLinkNews.js")
 					const dateProvider = await this.noZoneDateProvider()
-					return new ReferralLinkNews(this.newsModel, dateProvider, logins.getUserController().userId)
+					return new ReferralLinkNews(this.newsModel, dateProvider, logins.getUserController())
 				default:
 					console.log(`No implementation for news named '${name}'`)
 					return null

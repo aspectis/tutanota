@@ -769,6 +769,7 @@ export type Customer = {
 	customizations: Feature[];
 	orderProcessingAgreement:  null | IdTuple;
 	properties:  null | Id;
+	referralCode:  null | Id;
 	rejectedSenders:  null | RejectedSendersRef;
 	serverProperties:  null | Id;
 	teamGroups: Id;
@@ -2874,7 +2875,6 @@ export type User = {
 	memberships: GroupMembership[];
 	phoneNumbers: PhoneNumber[];
 	pushIdentifierList:  null | PushIdentifierList;
-	referralCode:  null | Id;
 	secondFactorAuthentications: Id;
 	successfulLogins: Id;
 	userGroup: GroupMembership;

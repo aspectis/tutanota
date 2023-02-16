@@ -3,8 +3,7 @@ import { isApp } from "../../../api/common/Env.js"
 import { locator } from "../../../api/main/MainLocator.js"
 import { copyToClipboard } from "../../ClipboardUtils.js"
 import { showSnackBar } from "../../../gui/base/SnackBar.js"
-import { logins } from "../../../api/main/LoginController.js"
-import { createReferralCodePostIn } from "../../../api/entities/sys/TypeRefs.js"
+import { createReferralCodePostIn, CustomerTypeRef } from "../../../api/entities/sys/TypeRefs.js"
 import { ReferralCodeService } from "../../../api/entities/sys/Services.js"
 import { TextField, TextFieldAttrs } from "../../../gui/base/TextField.js"
 import m, { Children, Component, Vnode } from "mithril"
@@ -13,6 +12,7 @@ import { BootIcons } from "../../../gui/base/icons/BootIcons.js"
 import { ButtonSize } from "../../../gui/base/ButtonSize.js"
 import { Icons } from "../../../gui/base/icons/Icons.js"
 import { ifAllowedTutanotaLinks } from "../../../gui/base/GuiUtils.js"
+import { UserController } from "../../../api/main/UserController.js"
 
 export type ReferralLinkAttrs = {
 	referralLink: string
@@ -97,9 +97,9 @@ export class ReferralLinkViewer implements Component<ReferralLinkAttrs> {
 /**
  * Get the referral link for the logged-in user
  */
-export async function getReferralLink(): Promise<string> {
-	const user = logins.getUserController().user
-	const referralCode = user.referralCode ? user.referralCode : await requestNewReferralCode()
+export async function getReferralLink(userController: UserController): Promise<string> {
+	const customer = await userController.loadCustomer()
+	const referralCode = customer.referralCode ? customer.referralCode : await requestNewReferralCode()
 	return `https://mail.tutanota.com/signup?ref=${referralCode}`
 }
 

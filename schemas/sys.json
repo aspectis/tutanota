@@ -76,13 +76,13 @@
 			"changes": [
 				{
 					"name": "AddAssociation",
-					"sourceType": "User",
-					"info": "AddAssociation User/referralCode/ELEMENT_ASSOCIATION/2062."
+					"sourceType": "Customer",
+					"info": "AddAssociation Customer/referralCode/ELEMENT_ASSOCIATION/2061."
 				},
 				{
 					"name": "AddAssociation",
 					"sourceType": "CustomerInfo",
-					"info": "AddAssociation CustomerInfo/referredBy/ELEMENT_ASSOCIATION/2073."
+					"info": "AddAssociation CustomerInfo/referredBy/ELEMENT_ASSOCIATION/2072."
 				}
 			]
 		}
