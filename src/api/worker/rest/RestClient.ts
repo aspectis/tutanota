@@ -1,11 +1,10 @@
 import { assertWorkerOrNode, getApiOrigin, isAdminClient, isAndroidApp, isWebClient, isWorker } from "../../common/Env"
 import { ConnectionError, handleRestError, PayloadTooLargeError, ServiceUnavailableError, TooManyRequestsError } from "../../common/error/RestError"
 import { HttpMethod, MediaType } from "../../common/EntityFunctions"
-import { assertNotNull, LazyLoaded, neverNull, typedEntries, uint8ArrayToArrayBuffer } from "@tutao/tutanota-utils"
+import { assertNotNull, lazyAsync, typedEntries, uint8ArrayToArrayBuffer } from "@tutao/tutanota-utils"
 import { SuspensionHandler } from "../SuspensionHandler"
 import { REQUEST_SIZE_LIMIT_DEFAULT, REQUEST_SIZE_LIMIT_MAP } from "../../common/TutanotaConstants"
 import { SuspensionError } from "../../common/error/SuspensionError.js"
-import { BlobServerAccessInfo } from "../../entities/storage/TypeRefs.js"
 
 assertWorkerOrNode()
 
@@ -22,19 +21,13 @@ export const enum SuspensionBehavior {
 	Throw,
 }
 
-export type BlobAccessParams = {
-	queryParams: Dict
-	blobAccessInfo: BlobServerAccessInfo
-}
-
 export interface RestClientOptions {
 	body?: string | Uint8Array
 	responseType?: MediaType
 	progressListener?: ProgressListener
 	baseUrl?: string
 	headers?: Dict
-	queryParams?: Dict
-	blobAccessParams?: LazyLoaded<BlobAccessParams>
+	queryParams?: Dict | lazyAsync<Dict>
 	noCORS?: boolean
 	/** Default is to suspend all requests on rate limit. */
 	suspensionBehavior?: SuspensionBehavior
@@ -72,30 +65,18 @@ export class RestClient {
 			return new Promise(async (resolve, reject) => {
 				this.id++
 
-				if (options.blobAccessParams) {
-					const blobAccessParams = options.blobAccessParams.getSync()
-					if (blobAccessParams && blobAccessParams.blobAccessInfo.expires < new Date()) {
-						console.log("expired access token")
-						await options.blobAccessParams.reload()
-					}
-					options.queryParams = neverNull(options.blobAccessParams.getSync()).queryParams
-					console.log("Set query params for blob request", options.queryParams)
-				}
-
-				if (!options.queryParams) {
-					options.queryParams = {}
-				}
+				const queryParams: Dict = typeof options.queryParams === "function" ? await options.queryParams() : options.queryParams ?? {}
 
 				if (method === HttpMethod.GET && typeof options.body === "string") {
-					options.queryParams["_body"] = options.body // get requests are not allowed to send a body. Therefore, we convert our body to a paramater
+					queryParams["_body"] = options.body // get requests are not allowed to send a body. Therefore, we convert our body to a paramater
 				}
 
 				if (options.noCORS) {
-					options.queryParams["cv"] = env.versionNumber
+					queryParams["cv"] = env.versionNumber
 				}
 
 				const origin = options.baseUrl ?? getApiOrigin()
-				const url = addParamsToUrl(new URL(origin + path), options.queryParams)
+				const url = addParamsToUrl(new URL(origin + path), queryParams)
 				const xhr = new XMLHttpRequest()
 				xhr.open(method, url.toString())
 
@@ -314,7 +295,6 @@ export class RestClient {
 		if (responseType) {
 			headers["Accept"] = responseType
 		}
-
 		for (const i in headers) {
 			xhr.setRequestHeader(i, headers[i])
 		}

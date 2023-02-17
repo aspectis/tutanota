@@ -26,6 +26,7 @@ import {
 	MailDetailsBlob,
 	MailDetailsBlobTypeRef,
 } from "../../../../../src/api/entities/tutanota/TypeRefs.js"
+import {BlobFacade} from "../../../../../src/api/worker/facades/BlobFacade.js"
 
 const { anything, argThat } = matchers
 
@@ -61,6 +62,7 @@ o.spec("EntityRestClient", async function () {
 	let cryptoFacadeMock: CryptoFacade
 	let fullyLoggedIn: boolean
 	let blobAccessTokenFacade: BlobAccessTokenFacade
+	let blobFacade: BlobFacade
 
 	o.beforeEach(function () {
 		cryptoFacadeMock = object()
@@ -83,6 +85,7 @@ o.spec("EntityRestClient", async function () {
 		})
 
 		blobAccessTokenFacade = instance(BlobAccessTokenFacade)
+		blobFacade = instance(BlobFacade)
 
 		restClient = object()
 
@@ -96,7 +99,7 @@ o.spec("EntityRestClient", async function () {
 				return fullyLoggedIn
 			},
 		}
-		entityRestClient = new EntityRestClient(authDataProvider, restClient, () => cryptoFacadeMock, instanceMapperMock, blobAccessTokenFacade)
+		entityRestClient = new EntityRestClient(authDataProvider, restClient, () => cryptoFacadeMock, instanceMapperMock, blobAccessTokenFacade, blobFacade)
 	})
 
 	function assertThatNoRequestsWereMade() {

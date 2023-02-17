@@ -33,7 +33,7 @@ export class EntityRestClientMock extends EntityRestClient {
 	_lastIdTimestamp: number
 
 	constructor() {
-		super(authDataProvider, downcast({}), () => downcast({}), new InstanceMapper(), downcast({}))
+		super(authDataProvider, downcast({}), () => downcast({}), new InstanceMapper(), downcast({}), downcast({}))
 		this._lastIdTimestamp = Date.now()
 	}
 

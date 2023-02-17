@@ -1,6 +1,6 @@
-import { addParamsToUrl, BlobAccessParams, isSuspensionResponse, RestClient } from "../../rest/RestClient.js"
+import { addParamsToUrl, isSuspensionResponse, RestClient } from "../../rest/RestClient.js"
 import { CryptoFacade, encryptBytes } from "../../crypto/CryptoFacade.js"
-import { concat, lazyAsync, LazyLoaded, neverNull, promiseMap, splitUint8ArrayInChunks, uint8ArrayToBase64, uint8ArrayToString } from "@tutao/tutanota-utils"
+import { concat, lazyAsync, neverNull, promiseMap, splitUint8ArrayInChunks, uint8ArrayToBase64, uint8ArrayToString } from "@tutao/tutanota-utils"
 import { ArchiveDataType, MAX_BLOB_SIZE_BYTES } from "../../../common/TutanotaConstants.js"
 
 import { HttpMethod, MediaType, resolveTypeReference } from "../../../common/EntityFunctions.js"
@@ -22,6 +22,7 @@ import { BlobGetInTypeRef, BlobPostOut, BlobPostOutTypeRef, BlobServerAccessInfo
 import { AuthDataProvider } from "../UserFacade.js"
 import { tryServers } from "../../rest/EntityRestClient.js"
 import { BlobAccessTokenFacade } from "../BlobAccessTokenFacade.js"
+import { DateProvider } from "../../common/DateProvider.js"
 
 assertWorkerOrNode()
 export const BLOB_SERVICE_REST_PATH = `/rest/${BlobService.app}/${BlobService.name.toLowerCase()}`
@@ -43,6 +44,7 @@ export class BlobFacade {
 	private readonly instanceMapper: InstanceMapper
 	private readonly cryptoFacade: CryptoFacade
 	private readonly blobAccessTokenFacade: BlobAccessTokenFacade
+	private readonly dateProvider: DateProvider
 
 	constructor(
 		private readonly authDataProvider: AuthDataProvider,
@@ -54,6 +56,7 @@ export class BlobFacade {
 		instanceMapper: InstanceMapper,
 		cryptoFacade: CryptoFacade,
 		blobAccessTokenFacade: BlobAccessTokenFacade,
+		dateProvider: DateProvider,
 	) {
 		this.serviceExecutor = serviceExecutor
 		this.restClient = restClient
@@ -63,6 +66,7 @@ export class BlobFacade {
 		this.instanceMapper = instanceMapper
 		this.cryptoFacade = cryptoFacade
 		this.blobAccessTokenFacade = blobAccessTokenFacade
+		this.dateProvider = dateProvider
 	}
 
 	/**
@@ -98,10 +102,10 @@ export class BlobFacade {
 		if (!isApp() && !isDesktop()) {
 			throw new ProgrammingError("Environment is not app or Desktop!")
 		}
-		const blobAccessInfo = await this.blobAccessTokenFacade.requestWriteToken(archiveDataType, ownerGroupId)
+		const blobAccessInfoFactory = () => this.blobAccessTokenFacade.requestWriteToken(archiveDataType, ownerGroupId)
 		const chunkUris = await this.fileApp.splitFile(fileUri, MAX_BLOB_SIZE_BYTES)
 		return promiseMap(chunkUris, async (chunkUri) => {
-			return this.encryptAndUploadNativeChunk(chunkUri, blobAccessInfo, sessionKey)
+			return this.encryptAndUploadNativeChunk(chunkUri, blobAccessInfoFactory, sessionKey)
 		})
 	}
 
@@ -114,9 +118,9 @@ export class BlobFacade {
 	 * @returns Uint8Array unencrypted binary data
 	 */
 	async downloadAndDecrypt(archiveDataType: ArchiveDataType, blobs: Blob[], referencingInstance: SomeEntity): Promise<Uint8Array> {
-		const blobAccessInfo = await this.blobAccessTokenFacade.requestReadTokenBlobs(archiveDataType, blobs, referencingInstance)
+		const blobAccessInfoFactory = () => this.blobAccessTokenFacade.requestReadTokenBlobs(archiveDataType, blobs, referencingInstance)
 		const sessionKey = neverNull(await this.cryptoFacade.resolveSessionKeyForInstance(referencingInstance))
-		const blobData = await promiseMap(blobs, (blob) => this.downloadAndDecryptChunk(blob, blobAccessInfo, sessionKey))
+		const blobData = await promiseMap(blobs, (blob) => this.downloadAndDecryptChunk(blob, blobAccessInfoFactory, sessionKey))
 		return concat(...blobData)
 	}
 
@@ -141,12 +145,12 @@ export class BlobFacade {
 		if (!isApp() && !isDesktop()) {
 			throw new ProgrammingError("Environment is not app or Desktop!")
 		}
-		const blobAccessInfo = await this.blobAccessTokenFacade.requestReadTokenBlobs(archiveDataType, blobs, referencingInstance)
+		const blobAccessInfoFactory = () => this.blobAccessTokenFacade.requestReadTokenBlobs(archiveDataType, blobs, referencingInstance)
 		const sessionKey = neverNull(await this.cryptoFacade.resolveSessionKeyForInstance(referencingInstance))
 		const decryptedChunkFileUris: FileUri[] = []
 		for (const blob of blobs) {
 			try {
-				decryptedChunkFileUris.push(await this.downloadAndDecryptChunkNative(blob, blobAccessInfo, sessionKey))
+				decryptedChunkFileUris.push(await this.downloadAndDecryptChunkNative(blob, blobAccessInfoFactory, sessionKey))
 			} catch (e) {
 				for (const decryptedChunkFileUri of decryptedChunkFileUris) {
 					await this.fileApp.deleteFile(decryptedChunkFileUri)
@@ -179,21 +183,14 @@ export class BlobFacade {
 		sessionKey: Aes128Key,
 	): Promise<BlobReferenceTokenWrapper> {
 		const encryptedData = encryptBytes(sessionKey, chunk)
-		const queryParamsFactory: LazyLoaded<BlobAccessParams> = new LazyLoaded(async () => {
-			const blobAccessInfo = await blobAccessInfoFactory()
-			const blobHash = uint8ArrayToBase64(sha256Hash(encryptedData).slice(0, 6))
-			return {
-				queryParams: await this.createParams({ blobAccessToken: blobAccessInfo.blobAccessToken, blobHash }),
-				blobAccessInfo: blobAccessInfo,
-			}
-		})
+		const blobHash = uint8ArrayToBase64(sha256Hash(encryptedData).slice(0, 6))
+		const { queryParamsFactory, servers } = await this.queryParamsFactoryFactory(blobAccessInfoFactory, { blobHash }, this.dateProvider)
 
-		const blobAccessParams: BlobAccessParams = await queryParamsFactory.getAsync()
 		return tryServers(
-			blobAccessParams.blobAccessInfo.servers,
+			servers,
 			async (serverUrl) => {
 				const response = await this.restClient.request(BLOB_SERVICE_REST_PATH, HttpMethod.POST, {
-					blobAccessParams: queryParamsFactory,
+					queryParams: queryParamsFactory,
 					body: encryptedData,
 					responseType: MediaType.Json,
 					baseUrl: serverUrl,
@@ -204,32 +201,53 @@ export class BlobFacade {
 		)
 	}
 
+	public async queryParamsFactoryFactory(
+		blobAccessInfoFactory: lazyAsync<BlobServerAccessInfo>,
+		options: Dict,
+		dateProvider: DateProvider,
+	) {
+		let blobAccessInfo = await blobAccessInfoFactory()
+		return {
+			queryParamsFactory: async () => {
+				if (blobAccessInfo.expires.getTime() < dateProvider.now()) {
+					blobAccessInfo = await blobAccessInfoFactory()
+				}
+				return this.createParams(
+					Object.assign(options, {
+						blobAccessToken: blobAccessInfo.blobAccessToken,
+					}),
+				)
+			},
+			servers: blobAccessInfo.servers,
+		}
+	}
+
 	private async encryptAndUploadNativeChunk(
 		fileUri: FileUri,
-		blobAccessInfo: BlobServerAccessInfo,
+		blobAccessInfo: lazyAsync<BlobServerAccessInfo>,
 		sessionKey: Aes128Key,
 	): Promise<BlobReferenceTokenWrapper> {
-		const { blobAccessToken, servers } = blobAccessInfo
 		const encryptedFileInfo = await this.aesApp.aesEncryptFile(sessionKey, fileUri)
 		const encryptedChunkUri = encryptedFileInfo.uri
 		const blobHash = await this.fileApp.hashFile(encryptedChunkUri)
+		const { queryParamsFactory, servers } = await this.queryParamsFactoryFactory(blobAccessInfo, { blobHash }, this.dateProvider)
 
-		const queryParams = await this.createParams({ blobAccessToken, blobHash })
 		return tryServers(
 			servers,
 			async (serverUrl) => {
 				const serviceUrl = new URL(BLOB_SERVICE_REST_PATH, serverUrl)
-				const fullUrl = addParamsToUrl(serviceUrl, queryParams)
-				return await this.uploadNative(encryptedChunkUri, fullUrl)
+				const fullUrlFactory = async () => addParamsToUrl(serviceUrl, await queryParamsFactory())
+				return await this.uploadNative(encryptedChunkUri, fullUrlFactory)
 			},
 			`can't upload to server from native`,
 		)
 	}
 
-	private async uploadNative(location: string, fullUrl: URL): Promise<BlobReferenceTokenWrapper> {
+	private async uploadNative(location: string, fullUrlFactory: lazyAsync<URL>): Promise<BlobReferenceTokenWrapper> {
 		if (this.suspensionHandler.isSuspended()) {
-			return this.suspensionHandler.deferRequest(() => this.uploadNative(location, fullUrl))
+			return this.suspensionHandler.deferRequest(() => this.uploadNative(location, fullUrlFactory))
 		}
+		const fullUrl = await fullUrlFactory()
 		const { suspensionTime, responseBody, statusCode, errorId, precondition } = await this.fileApp.upload(location, fullUrl.toString(), HttpMethod.POST, {}) // blobReferenceToken in the response body
 
 		if (statusCode === 201 && responseBody != null) {
@@ -238,7 +256,7 @@ export class BlobFacade {
 			throw new Error("no response body")
 		} else if (isSuspensionResponse(statusCode, suspensionTime)) {
 			this.suspensionHandler.activateSuspensionIfInactive(Number(suspensionTime))
-			return this.suspensionHandler.deferRequest(() => this.uploadNative(location, fullUrl))
+			return this.suspensionHandler.deferRequest(() => this.uploadNative(location, fullUrlFactory))
 		} else {
 			throw handleRestError(statusCode, ` | PUT ${fullUrl.toString()} failed to natively upload blob`, errorId, precondition)
 		}
@@ -251,10 +269,9 @@ export class BlobFacade {
 		return createBlobReferenceTokenWrapper({ blobReferenceToken })
 	}
 
-	private async downloadAndDecryptChunk(blob: Blob, blobAccessInfo: BlobServerAccessInfo, sessionKey: Aes128Key): Promise<Uint8Array> {
-		const { blobAccessToken, servers } = blobAccessInfo
+	private async downloadAndDecryptChunk(blob: Blob, blobAccessInfo: lazyAsync<BlobServerAccessInfo>, sessionKey: Aes128Key): Promise<Uint8Array> {
 		const { archiveId, blobId } = blob
-		const queryParams = await this.createParams({ blobAccessToken })
+		const { queryParamsFactory, servers } = await this.queryParamsFactoryFactory(blobAccessInfo, {}, this.dateProvider)
 		const getData = createBlobGetIn({
 			archiveId,
 			blobId,
@@ -267,7 +284,7 @@ export class BlobFacade {
 			servers,
 			async (serverUrl) => {
 				const data = await this.restClient.request(BLOB_SERVICE_REST_PATH, HttpMethod.GET, {
-					queryParams,
+					queryParams: queryParamsFactory,
 					body,
 					responseType: MediaType.Binary,
 					baseUrl: serverUrl,
@@ -279,7 +296,7 @@ export class BlobFacade {
 		)
 	}
 
-	private async createParams(options: { blobAccessToken: string; blobHash?: string; _body?: string }): Promise<Dict> {
+	private async createParams(options: Dict): Promise<Dict> {
 		const { blobAccessToken, blobHash, _body } = options
 		const BlobGetInTypeModel = await resolveTypeReference(BlobGetInTypeRef)
 		return Object.assign(
@@ -293,8 +310,7 @@ export class BlobFacade {
 		)
 	}
 
-	private async downloadAndDecryptChunkNative(blob: Blob, blobAccessInfo: BlobServerAccessInfo, sessionKey: Aes128Key): Promise<FileUri> {
-		const { blobAccessToken, servers } = blobAccessInfo
+	private async downloadAndDecryptChunkNative(blob: Blob, blobAccessInfo: lazyAsync<BlobServerAccessInfo>, sessionKey: Aes128Key): Promise<FileUri> {
 		const { archiveId, blobId } = blob
 		const getData = createBlobGetIn({
 			archiveId,
@@ -303,13 +319,13 @@ export class BlobFacade {
 		const BlobGetInTypeModel = await resolveTypeReference(BlobGetInTypeRef)
 		const literalGetData = await this.instanceMapper.encryptAndMapToLiteral(BlobGetInTypeModel, getData, null)
 		const _body = JSON.stringify(literalGetData)
-		const queryParams = await this.createParams({ blobAccessToken, _body })
+		const { queryParamsFactory, servers } = await this.queryParamsFactoryFactory(blobAccessInfo, { _body }, this.dateProvider)
 		const blobFilename = blobId + ".blob"
 
 		return tryServers(
 			servers,
 			async (serverUrl) => {
-				return await this.downloadNative(serverUrl, queryParams, sessionKey, blobFilename)
+				return await this.downloadNative(serverUrl, queryParamsFactory, sessionKey, blobFilename)
 			},
 			`can't download native from server `,
 		)
@@ -318,12 +334,12 @@ export class BlobFacade {
 	/**
 	 * @return the uri of the decrypted blob
 	 */
-	private async downloadNative(serverUrl: string, queryParams: Dict, sessionKey: Aes128Key, fileName: string): Promise<FileUri> {
+	private async downloadNative(serverUrl: string, queryParamsFactory: lazyAsync<Dict>, sessionKey: Aes128Key, fileName: string): Promise<FileUri> {
 		if (this.suspensionHandler.isSuspended()) {
-			return this.suspensionHandler.deferRequest(() => this.downloadNative(serverUrl, queryParams, sessionKey, fileName))
+			return this.suspensionHandler.deferRequest(() => this.downloadNative(serverUrl, queryParamsFactory, sessionKey, fileName))
 		}
 		const serviceUrl = new URL(BLOB_SERVICE_REST_PATH, serverUrl)
-		const url = addParamsToUrl(serviceUrl, queryParams)
+		const url = addParamsToUrl(serviceUrl, await queryParamsFactory())
 		const { statusCode, encryptedFileUri, suspensionTime, errorId, precondition } = await this.fileApp.download(url.toString(), fileName, {})
 		if (statusCode == 200 && encryptedFileUri != null) {
 			const decryptedFileUrl = await this.aesApp.aesDecryptFile(sessionKey, encryptedFileUri)
@@ -335,7 +351,7 @@ export class BlobFacade {
 			return decryptedFileUrl
 		} else if (isSuspensionResponse(statusCode, suspensionTime)) {
 			this.suspensionHandler.activateSuspensionIfInactive(Number(suspensionTime))
-			return this.suspensionHandler.deferRequest(() => this.downloadNative(serverUrl, queryParams, sessionKey, fileName))
+			return this.suspensionHandler.deferRequest(() => this.downloadNative(serverUrl, queryParamsFactory, sessionKey, fileName))
 		} else {
 			throw handleRestError(statusCode, ` | GET failed to natively download attachment`, errorId, precondition)
 		}

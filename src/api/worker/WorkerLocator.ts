@@ -130,7 +130,7 @@ export async function initLocator(worker: WorkerImpl, browserData: BrowserData) 
 	locator.serviceExecutor = new ServiceExecutor(locator.restClient, locator.user, locator.instanceMapper, () => locator.crypto)
 	locator.entropyFacade = new EntropyFacade(locator.user, locator.serviceExecutor, random)
 	locator.blobAccessToken = new BlobAccessTokenFacade(locator.serviceExecutor, dateProvider)
-	const entityRestClient = new EntityRestClient(locator.user, locator.restClient, () => locator.crypto, locator.instanceMapper, locator.blobAccessToken)
+	const entityRestClient = new EntityRestClient(locator.user, locator.restClient, () => locator.crypto, locator.instanceMapper, locator.blobAccessToken, locator.blob)
 	locator._browserData = browserData
 
 	locator.native = worker
@@ -222,6 +222,7 @@ export async function initLocator(worker: WorkerImpl, browserData: BrowserData) 
 		locator.user,
 		locator.blobAccessToken,
 		locator.entropyFacade,
+		locator.blob,
 	)
 
 	locator.search = lazyMemoized(async () => {
@@ -268,17 +269,18 @@ export async function initLocator(worker: WorkerImpl, browserData: BrowserData) 
 	const aesApp = new AesApp(new NativeCryptoFacadeSendDispatcher(worker), random)
 	locator.blob = lazyMemoized(async () => {
 		const { BlobFacade } = await import("./facades/lazy/BlobFacade.js")
-		return new BlobFacade(
-			locator.user,
-			locator.serviceExecutor,
-			locator.restClient,
-			suspensionHandler,
-			fileApp,
-			aesApp,
-			locator.instanceMapper,
-			locator.crypto,
-			locator.blobAccessToken,
-		)
+		returnnew BlobFacade(
+		locator.user,
+		locator.serviceExecutor,
+		locator.restClient,
+		suspensionHandler,
+		fileApp,
+		aesApp,
+		locator.instanceMapper,
+		locator.crypto,
+		locator.blobAccessToken,
+		dateProvider,
+	)
 	})
 	locator.file = lazyMemoized(async () => {
 		const { FileFacade } = await import("./facades/lazy/FileFacade.js")

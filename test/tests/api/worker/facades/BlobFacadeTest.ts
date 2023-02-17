@@ -22,6 +22,8 @@ import { createBlobPostOut, createBlobServerAccessInfo, createBlobServerUrl } fr
 import storageModelInfo from "../../../../../src/api/entities/storage/ModelInfo.js"
 import type { AuthDataProvider } from "../../../../../src/api/worker/facades/UserFacade.js"
 import { BlobAccessTokenFacade } from "../../../../../src/api/worker/facades/BlobAccessTokenFacade.js"
+import {DateProvider} from "../../../../../src/api/common/DateProvider.js"
+import {DateProviderImpl} from "../../../../../src/calendar/date/CalendarUtils.js"
 
 const { anything, captor } = matchers
 
@@ -40,6 +42,7 @@ o.spec("BlobFacade test", function () {
 	const blobs = [createBlob({ archiveId, blobId: blobId1 }), createBlob({ archiveId, blobId: "blobId2" }), createBlob({ archiveId })]
 	let archiveDataType = ArchiveDataType.Attachments
 	let cryptoFacadeMock: CryptoFacade
+	let dateProvider: DateProvider
 
 	o.beforeEach(function () {
 		authDataProvider = object<AuthDataProvider>()
@@ -51,6 +54,7 @@ o.spec("BlobFacade test", function () {
 		instanceMapperMock = instance(InstanceMapper)
 		cryptoFacadeMock = object<CryptoFacade>()
 		blobAccessTokenFacade = instance(BlobAccessTokenFacade)
+		dateProvider = new DateProviderImpl()
 
 		blobFacade = new BlobFacade(
 			authDataProvider,
@@ -62,6 +66,7 @@ o.spec("BlobFacade test", function () {
 			instanceMapperMock,
 			cryptoFacadeMock,
 			blobAccessTokenFacade,
+			dateProvider,
 		)
 	})
 

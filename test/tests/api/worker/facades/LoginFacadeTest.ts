@@ -33,6 +33,7 @@ import { ConnectMode, EventBusClient } from "../../../../../src/api/worker/Event
 import { createTutanotaProperties, TutanotaPropertiesTypeRef } from "../../../../../src/api/entities/tutanota/TypeRefs"
 import { BlobAccessTokenFacade } from "../../../../../src/api/worker/facades/BlobAccessTokenFacade.js"
 import { EntropyFacade } from "../../../../../src/api/worker/facades/EntropyFacade.js"
+import {BlobFacade} from "../../../../../src/api/worker/facades/BlobFacade.js"
 
 const { anything } = matchers
 
@@ -69,6 +70,7 @@ o.spec("LoginFacadeTest", function () {
 	let userFacade: UserFacade
 	let entropyFacade: EntropyFacade
 	let blobAccessTokenFacade: BlobAccessTokenFacade
+	let blobFacade: BlobFacade
 
 	const timeRangeDays = 42
 
@@ -119,6 +121,7 @@ o.spec("LoginFacadeTest", function () {
 			userFacade,
 			blobAccessTokenFacade,
 			entropyFacade,
+			blobFacade,
 		)
 
 		eventBusClientMock = instance(EventBusClient)

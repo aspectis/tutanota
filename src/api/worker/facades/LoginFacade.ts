@@ -87,6 +87,7 @@ import { LoginIncompleteError } from "../../common/error/LoginIncompleteError.js
 import { EntropyFacade } from "./EntropyFacade.js"
 import { BlobAccessTokenFacade } from "./BlobAccessTokenFacade.js"
 import { ProgrammingError } from "../../common/error/ProgrammingError.js"
+import {BlobFacade} from "./BlobFacade.js"
 
 assertWorkerOrNode()
 
@@ -179,6 +180,7 @@ export class LoginFacade {
 		private readonly userFacade: UserFacade,
 		private readonly blobAccessTokenFacade: BlobAccessTokenFacade,
 		private readonly entropyFacade: EntropyFacade,
+		private readonly blobFacade: BlobFacade,
 	) {}
 
 	init(eventBusClient: EventBusClient) {
@@ -799,6 +801,7 @@ export class LoginFacade {
 			() => this.cryptoFacade,
 			this.instanceMapper,
 			this.blobAccessTokenFacade,
+			this.blobFacade,
 		)
 		const entityClient = new EntityClient(eventRestClient)
 		return this.serviceExecutor
