@@ -1144,7 +1144,7 @@ export type ImportImapAccountSyncState = {
 	postponedUntil: NumberString;
 
 	imapAccount: ImportImapAccount;
-	imapFolderSyncStates: Id;
+	imapFolderSyncStateList: Id;
 }
 export const ImportImapDeleteInTypeRef: TypeRef<ImportImapDeleteIn> = new TypeRef("tutanota", "ImportImapDeleteIn")
 
@@ -1159,6 +1159,53 @@ export type ImportImapDeleteIn = {
 	_format: NumberString;
 
 	imapAccountSyncState: Id;
+}
+export const ImportImapFolderDeleteInTypeRef: TypeRef<ImportImapFolderDeleteIn> = new TypeRef("tutanota", "ImportImapFolderDeleteIn")
+
+export function createImportImapFolderDeleteIn(values?: Partial<ImportImapFolderDeleteIn>): ImportImapFolderDeleteIn {
+	return Object.assign(create(typeModels.ImportImapFolderDeleteIn, ImportImapFolderDeleteInTypeRef), values)
+}
+
+export type ImportImapFolderDeleteIn = {
+	_type: TypeRef<ImportImapFolderDeleteIn>;
+
+	_format: NumberString;
+
+	imapFolderSyncState: IdTuple;
+}
+export const ImportImapFolderPostInTypeRef: TypeRef<ImportImapFolderPostIn> = new TypeRef("tutanota", "ImportImapFolderPostIn")
+
+export function createImportImapFolderPostIn(values?: Partial<ImportImapFolderPostIn>): ImportImapFolderPostIn {
+	return Object.assign(create(typeModels.ImportImapFolderPostIn, ImportImapFolderPostInTypeRef), values)
+}
+
+export type ImportImapFolderPostIn = {
+	_type: TypeRef<ImportImapFolderPostIn>;
+	_errors: Object;
+
+	_format: NumberString;
+	highestmodseq: NumberString;
+	ownerEncSessionKey: Uint8Array;
+	ownerGroup: Id;
+	path: string;
+	uidnext: NumberString;
+	uidvalidity: NumberString;
+
+	imapAccountSyncState: Id;
+	mailFolder: IdTuple;
+}
+export const ImportImapFolderPostOutTypeRef: TypeRef<ImportImapFolderPostOut> = new TypeRef("tutanota", "ImportImapFolderPostOut")
+
+export function createImportImapFolderPostOut(values?: Partial<ImportImapFolderPostOut>): ImportImapFolderPostOut {
+	return Object.assign(create(typeModels.ImportImapFolderPostOut, ImportImapFolderPostOutTypeRef), values)
+}
+
+export type ImportImapFolderPostOut = {
+	_type: TypeRef<ImportImapFolderPostOut>;
+
+	_format: NumberString;
+
+	imapFolderSyncState: IdTuple;
 }
 export const ImportImapFolderSyncStateTypeRef: TypeRef<ImportImapFolderSyncState> = new TypeRef("tutanota", "ImportImapFolderSyncState")
 
@@ -1194,9 +1241,10 @@ export type ImportImapPostIn = {
 	_errors: Object;
 
 	_format: NumberString;
-	mailGroup: Id;
 	maxQuota: NumberString;
 	ownerEncImapAccountSyncStateSessionKey: Uint8Array;
+	ownerGroup: Id;
+	postponedUntil: NumberString;
 
 	imapAccount: ImportImapAccount;
 }
@@ -1229,6 +1277,40 @@ export type ImportImapUidToMail = {
 
 	mail: IdTuple;
 }
+export const ImportMailDataTypeRef: TypeRef<ImportMailData> = new TypeRef("tutanota", "ImportMailData")
+
+export function createImportMailData(values?: Partial<ImportMailData>): ImportMailData {
+	return Object.assign(create(typeModels.ImportMailData, ImportMailDataTypeRef), values)
+}
+
+export type ImportMailData = {
+	_type: TypeRef<ImportMailData>;
+
+	_id: Id;
+	bodyText: string;
+	compressedBodyText: null | string;
+	compressedHeaders: string;
+	confidential: boolean;
+	differentEnvelopeSender: null | string;
+	messageId: string;
+	method: NumberString;
+	phishingStatus: NumberString;
+	receivedDate: Date;
+	replyType: NumberString;
+	senderMailAddress: string;
+	senderName: string;
+	sentDate: Date;
+	state: NumberString;
+	subject: string;
+	unread: boolean;
+
+	addedAttachments: DraftAttachment[];
+	bccRecipients: DraftRecipient[];
+	ccRecipients: DraftRecipient[];
+	removedAttachments: IdTuple[];
+	replyTos: EncryptedMailAddress[];
+	toRecipients: DraftRecipient[];
+}
 export const ImportMailPostInTypeRef: TypeRef<ImportMailPostIn> = new TypeRef("tutanota", "ImportMailPostIn")
 
 export function createImportMailPostIn(values?: Partial<ImportMailPostIn>): ImportMailPostIn {
@@ -1240,14 +1322,14 @@ export type ImportMailPostIn = {
 	_errors: Object;
 
 	_format: NumberString;
+	conversationType: NumberString;
 	imapUid: NumberString;
 	ownerEncSessionKey: Uint8Array;
+	ownerGroup: Id;
 	previousMessageId: null | string;
-	replyType: NumberString;
-	state: NumberString;
 
 	imapFolderSyncState: IdTuple;
-	mailData: DraftData;
+	mailData: ImportMailData;
 }
 export const ImportMailPostOutTypeRef: TypeRef<ImportMailPostOut> = new TypeRef("tutanota", "ImportMailPostOut")
 
@@ -1623,7 +1705,7 @@ export type MailboxGroupRoot = {
 
 	calendarEventUpdates:  null | CalendarEventUpdateList;
 	contactFormUserContactForm:  null | IdTuple;
-	importImapAccountSyncState:  null | Id;
+	imapAccountSyncState:  null | Id;
 	mailbox: Id;
 	mailboxProperties:  null | Id;
 	outOfOfficeNotification:  null | Id;
