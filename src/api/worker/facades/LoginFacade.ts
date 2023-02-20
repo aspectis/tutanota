@@ -87,7 +87,8 @@ import { LoginIncompleteError } from "../../common/error/LoginIncompleteError.js
 import { EntropyFacade } from "./EntropyFacade.js"
 import { BlobAccessTokenFacade } from "./BlobAccessTokenFacade.js"
 import { ProgrammingError } from "../../common/error/ProgrammingError.js"
-import {BlobFacade} from "./BlobFacade.js"
+import { BlobFacade } from "./BlobFacade.js"
+import { DateProviderImpl } from "../../../calendar/date/CalendarUtils.js"
 
 assertWorkerOrNode()
 
@@ -801,7 +802,7 @@ export class LoginFacade {
 			() => this.cryptoFacade,
 			this.instanceMapper,
 			this.blobAccessTokenFacade,
-			this.blobFacade,
+			new DateProviderImpl(),
 		)
 		const entityClient = new EntityClient(eventRestClient)
 		return this.serviceExecutor

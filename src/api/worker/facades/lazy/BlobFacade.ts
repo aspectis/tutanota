@@ -23,6 +23,7 @@ import { AuthDataProvider } from "../UserFacade.js"
 import { tryServers } from "../../rest/EntityRestClient.js"
 import { BlobAccessTokenFacade } from "../BlobAccessTokenFacade.js"
 import { DateProvider } from "../../common/DateProvider.js"
+import { queryParamsFactoryFactory } from "../../common/utils/BlobUtils.js"
 
 assertWorkerOrNode()
 export const BLOB_SERVICE_REST_PATH = `/rest/${BlobService.app}/${BlobService.name.toLowerCase()}`
@@ -148,7 +149,9 @@ export class BlobFacade {
 		const blobAccessInfoFactory = () => this.blobAccessTokenFacade.requestReadTokenBlobs(archiveDataType, blobs, referencingInstance)
 		const sessionKey = neverNull(await this.cryptoFacade.resolveSessionKeyForInstance(referencingInstance))
 		const decryptedChunkFileUris: FileUri[] = []
+		let looped = 0
 		for (const blob of blobs) {
+			looped++
 			try {
 				decryptedChunkFileUris.push(await this.downloadAndDecryptChunkNative(blob, blobAccessInfoFactory, sessionKey))
 			} catch (e) {
@@ -158,6 +161,7 @@ export class BlobFacade {
 				throw e
 			}
 		}
+		console.log("looped", looped)
 		// now decryptedChunkFileUris has the correct order of downloaded blobs, and we need to tell native to join them
 		// check if output already exists and return cached?
 		try {
@@ -184,7 +188,7 @@ export class BlobFacade {
 	): Promise<BlobReferenceTokenWrapper> {
 		const encryptedData = encryptBytes(sessionKey, chunk)
 		const blobHash = uint8ArrayToBase64(sha256Hash(encryptedData).slice(0, 6))
-		const { queryParamsFactory, servers } = await this.queryParamsFactoryFactory(blobAccessInfoFactory, { blobHash }, this.dateProvider)
+		const { queryParamsFactory, servers } = await queryParamsFactoryFactory(blobAccessInfoFactory, { blobHash }, this.dateProvider, this.authDataProvider)
 
 		return tryServers(
 			servers,
@@ -201,27 +205,6 @@ export class BlobFacade {
 		)
 	}
 
-	public async queryParamsFactoryFactory(
-		blobAccessInfoFactory: lazyAsync<BlobServerAccessInfo>,
-		options: Dict,
-		dateProvider: DateProvider,
-	) {
-		let blobAccessInfo = await blobAccessInfoFactory()
-		return {
-			queryParamsFactory: async () => {
-				if (blobAccessInfo.expires.getTime() < dateProvider.now()) {
-					blobAccessInfo = await blobAccessInfoFactory()
-				}
-				return this.createParams(
-					Object.assign(options, {
-						blobAccessToken: blobAccessInfo.blobAccessToken,
-					}),
-				)
-			},
-			servers: blobAccessInfo.servers,
-		}
-	}
-
 	private async encryptAndUploadNativeChunk(
 		fileUri: FileUri,
 		blobAccessInfo: lazyAsync<BlobServerAccessInfo>,
@@ -230,7 +213,7 @@ export class BlobFacade {
 		const encryptedFileInfo = await this.aesApp.aesEncryptFile(sessionKey, fileUri)
 		const encryptedChunkUri = encryptedFileInfo.uri
 		const blobHash = await this.fileApp.hashFile(encryptedChunkUri)
-		const { queryParamsFactory, servers } = await this.queryParamsFactoryFactory(blobAccessInfo, { blobHash }, this.dateProvider)
+		const { queryParamsFactory, servers } = await queryParamsFactoryFactory(blobAccessInfo, { blobHash }, this.dateProvider, this.authDataProvider)
 
 		return tryServers(
 			servers,
@@ -271,7 +254,7 @@ export class BlobFacade {
 
 	private async downloadAndDecryptChunk(blob: Blob, blobAccessInfo: lazyAsync<BlobServerAccessInfo>, sessionKey: Aes128Key): Promise<Uint8Array> {
 		const { archiveId, blobId } = blob
-		const { queryParamsFactory, servers } = await this.queryParamsFactoryFactory(blobAccessInfo, {}, this.dateProvider)
+		const { queryParamsFactory, servers } = await queryParamsFactoryFactory(blobAccessInfo, {}, this.dateProvider, this.authDataProvider)
 		const getData = createBlobGetIn({
 			archiveId,
 			blobId,
@@ -296,20 +279,6 @@ export class BlobFacade {
 		)
 	}
 
-	private async createParams(options: Dict): Promise<Dict> {
-		const { blobAccessToken, blobHash, _body } = options
-		const BlobGetInTypeModel = await resolveTypeReference(BlobGetInTypeRef)
-		return Object.assign(
-			{
-				blobAccessToken,
-				blobHash,
-				_body,
-				v: BlobGetInTypeModel.version,
-			},
-			this.authDataProvider.createAuthHeaders(),
-		)
-	}
-
 	private async downloadAndDecryptChunkNative(blob: Blob, blobAccessInfo: lazyAsync<BlobServerAccessInfo>, sessionKey: Aes128Key): Promise<FileUri> {
 		const { archiveId, blobId } = blob
 		const getData = createBlobGetIn({
@@ -319,7 +288,7 @@ export class BlobFacade {
 		const BlobGetInTypeModel = await resolveTypeReference(BlobGetInTypeRef)
 		const literalGetData = await this.instanceMapper.encryptAndMapToLiteral(BlobGetInTypeModel, getData, null)
 		const _body = JSON.stringify(literalGetData)
-		const { queryParamsFactory, servers } = await this.queryParamsFactoryFactory(blobAccessInfo, { _body }, this.dateProvider)
+		const { queryParamsFactory, servers } = await queryParamsFactoryFactory(blobAccessInfo, { _body }, this.dateProvider, this.authDataProvider)
 		const blobFilename = blobId + ".blob"
 
 		return tryServers(

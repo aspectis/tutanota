@@ -19,8 +19,8 @@ import { AuthDataProvider } from "../facades/UserFacade"
 import { LoginIncompleteError } from "../../common/error/LoginIncompleteError.js"
 import { BlobServerUrl } from "../../entities/storage/TypeRefs.js"
 import { BlobAccessTokenFacade } from "../facades/BlobAccessTokenFacade.js"
-import { BlobFacade } from "../facades/BlobFacade.js"
-import {DateProvider} from "../../common/DateProvider.js"
+import { DateProvider } from "../../common/DateProvider.js"
+import { queryParamsFactoryFactory } from "../../common/utils/BlobUtils.js"
 
 assertWorkerOrNode()
 
@@ -208,14 +208,15 @@ export class EntityRestClient implements EntityRestInterface {
 			throw new Error("archiveId must be set to load BlobElementTypes")
 		}
 		const accessInfoFactory = () => this.blobAccessTokenFacade.requestReadTokenArchive(null, listId)
-		const { queryParamsFactory, servers } = await this.blobFacade.queryParamsFactoryFactory(
+		const { queryParamsFactory, servers } = await queryParamsFactoryFactory(
 			accessInfoFactory,
 			Object.assign(
 				{},
 				headers, // prevent CORS request due to non standard header usage
 				queryParams,
 			),
-			this.dateProvider
+			this.dateProvider,
+			this.authDataProvider,
 		)
 		return tryServers(
 			servers,

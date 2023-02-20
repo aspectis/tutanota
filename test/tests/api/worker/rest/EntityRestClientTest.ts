@@ -26,7 +26,9 @@ import {
 	MailDetailsBlob,
 	MailDetailsBlobTypeRef,
 } from "../../../../../src/api/entities/tutanota/TypeRefs.js"
-import {BlobFacade} from "../../../../../src/api/worker/facades/BlobFacade.js"
+import { BlobFacade } from "../../../../../src/api/worker/facades/BlobFacade.js"
+import { DateProvider } from "../../../../../src/api/common/DateProvider.js"
+import { DateProviderImpl } from "../../../../../src/calendar/date/CalendarUtils.js"
 
 const { anything, argThat } = matchers
 
@@ -63,6 +65,7 @@ o.spec("EntityRestClient", async function () {
 	let fullyLoggedIn: boolean
 	let blobAccessTokenFacade: BlobAccessTokenFacade
 	let blobFacade: BlobFacade
+	let dateProvider: DateProvider
 
 	o.beforeEach(function () {
 		cryptoFacadeMock = object()
@@ -99,7 +102,9 @@ o.spec("EntityRestClient", async function () {
 				return fullyLoggedIn
 			},
 		}
-		entityRestClient = new EntityRestClient(authDataProvider, restClient, () => cryptoFacadeMock, instanceMapperMock, blobAccessTokenFacade, blobFacade)
+
+		dateProvider = instance(DateProviderImpl)
+		entityRestClient = new EntityRestClient(authDataProvider, restClient, () => cryptoFacadeMock, instanceMapperMock, blobAccessTokenFacade, dateProvider)
 	})
 
 	function assertThatNoRequestsWereMade() {

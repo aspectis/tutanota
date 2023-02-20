@@ -37,6 +37,7 @@ export class BlobAccessTokenFacade {
 	 * @param ownerGroupId
 	 */
 	async requestWriteToken(archiveDataType: ArchiveDataType, ownerGroupId: Id): Promise<BlobServerAccessInfo> {
+		console.trace("getting write token")
 		const cachedBlobServerAccessInfo = this.getValidTokenFromWriteCache(archiveDataType, ownerGroupId)
 		if (cachedBlobServerAccessInfo != null) {
 			return cachedBlobServerAccessInfo
@@ -59,6 +60,7 @@ export class BlobAccessTokenFacade {
 	 * @param referencingInstance the instance that references the blobs
 	 */
 	async requestReadTokenBlobs(archiveDataType: ArchiveDataType | null, blobs: Blob[], referencingInstance: SomeEntity): Promise<BlobServerAccessInfo> {
+		console.trace("getting read token blobs")
 		const archiveId = this.getArchiveId(blobs)
 		let instanceListId: Id | null
 		let instanceId: Id
@@ -88,6 +90,7 @@ export class BlobAccessTokenFacade {
 	 * @param archiveId ID for the archive to read blobs from
 	 */
 	async requestReadTokenArchive(archiveDataType: ArchiveDataType | null, archiveId: Id): Promise<BlobServerAccessInfo> {
+		console.trace("getting read token archive")
 		const cachedBlobServerAccessInfo = this.readCache.get(archiveId)
 		if (cachedBlobServerAccessInfo != null && this.canBeUsedForAnotherRequest(cachedBlobServerAccessInfo)) {
 			return cachedBlobServerAccessInfo
