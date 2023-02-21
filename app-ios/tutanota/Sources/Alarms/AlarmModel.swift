@@ -1,22 +1,49 @@
 import Foundation
 
-typealias AlarmIterationCallback = (Int, Date) -> Void
+struct AlarmOccurrence {
+  let occurrenceNumber: Int
+  let occurenceDate: Date
+}
+
+struct LazyAlarmSequence : Sequence, IteratorProtocol {
+  let calcEventStart: Date
+  let endDate: Date?
+  let repeatRule: RepeatRule
+  let cal: Calendar
+  let calendarComponent: Calendar.Component
+  
+  fileprivate var ocurrenceNumber = 0
+  
+  mutating func next() -> AlarmOccurrence? {
+    if case let .count(n) = repeatRule.endCondition, ocurrenceNumber >= n {
+      return nil
+    }
+    let occurrenceDate = cal.date(
+      byAdding: self.calendarComponent,
+      value: repeatRule.interval * ocurrenceNumber,
+      to: calcEventStart
+    )!
+    if let endDate = endDate, occurrenceDate >= endDate  {
+      return nil
+    } else {
+      ocurrenceNumber += 1
+      return AlarmOccurrence(occurrenceNumber: ocurrenceNumber, occurenceDate: occurrenceDate)
+    }
+  }
+}
 
 class AlarmModel {
   static func iterateRepeatingAlarm(
     eventStart: Date,
     eventEnd: Date,
     repeatRule: RepeatRule,
-    now: Date,
-    localTimeZone: TimeZone,
-    scheduleAhead: Int,
-    block:AlarmIterationCallback
-  ) {
+    localTimeZone: TimeZone
+  ) -> LazyAlarmSequence {
     var cal = Calendar.current
-    let calendarUnit = Self.calendarUnit(for: repeatRule.frequency)
+    let calendarUnit = calendarUnit(for: repeatRule.frequency)
     
-    let isAllDayEvent = Self.isAllDayEvent(startTime: eventStart, endTime: eventEnd)
-    let calcEventStart = isAllDayEvent ? Self.allDayDateLocal(dateUTC: eventStart) : eventStart
+    let isAllDayEvent = isAllDayEvent(startTime: eventStart, endTime: eventEnd)
+    let calcEventStart = isAllDayEvent ? allDayDateLocal(dateUTC: eventStart) : eventStart
     let endDate: Date?
     switch repeatRule.endCondition {
     case let .untilDate(valueDate):
@@ -31,25 +58,7 @@ class AlarmModel {
     
     cal.timeZone = isAllDayEvent ? localTimeZone : TimeZone(identifier: repeatRule.timeZone) ?? localTimeZone
     
-    var ocurrences = 0
-    var ocurrencesAfterNow = 0
-    while ocurrencesAfterNow < scheduleAhead {
-      if case let .count(n) = repeatRule.endCondition, ocurrences >= n {
-        break
-      }
-      let ocurrenceDate = cal.date(
-        byAdding: calendarUnit,
-        value: repeatRule.interval * ocurrences,
-        to: calcEventStart
-      )!
-      if let endDate = endDate, ocurrenceDate >= endDate  {
-        break
-      } else if ocurrenceDate >= now {
-        block(ocurrences, ocurrenceDate)
-        ocurrencesAfterNow += 1
-      }
-      ocurrences += 1
-    }
+    return LazyAlarmSequence(calcEventStart: calcEventStart, endDate: endDate, repeatRule: repeatRule, cal: cal, calendarComponent: calendarUnit)
   }
   
   static func alarmTime(trigger: String, eventTime: Date) -> Date {
@@ -83,43 +92,43 @@ class AlarmModel {
     localComponents.timeZone = timeZone
     return calendar.date(from: localComponents)!
   }
+}
+
+func allDayDateLocal(dateUTC: Date) -> Date {
+  var calendar = Calendar.current
+  let timeZone = TimeZone(identifier: "UTC")!
+  calendar.timeZone = timeZone
+  let components = calendar.dateComponents([.year, .month, .day], from: dateUTC)
+  calendar.timeZone = TimeZone.current
+  return calendar.date(from: components)!
+}
+
+private func isAllDayEvent(startTime: Date, endTime: Date) -> Bool {
+  var calendar = Calendar.current
+  calendar.timeZone = TimeZone(abbreviation: "UTC")!
   
-  static func allDayDateLocal(dateUTC: Date) -> Date {
-    var calendar = Calendar.current
-    let timeZone = TimeZone(identifier: "UTC")!
-    calendar.timeZone = timeZone
-    let components = calendar.dateComponents([.year, .month, .day], from: dateUTC)
-    calendar.timeZone = TimeZone.current
-    return calendar.date(from: components)!
-  }
+  let startComponents = calendar.dateComponents([.hour, .minute, .second], from: startTime)
+  let startsOnZero = startComponents.hour == 0
+  && startComponents.minute == 0
+  && startComponents.second == 0
   
-  private static func calendarUnit(for repeatPeriod: RepeatPeriod) -> Calendar.Component {
-    switch (repeatPeriod) {
-    case .daily:
-      return .day
-    case .weekly:
-      return .weekOfYear
-    case .monthly:
-      return .month
-    case .annually:
-      return .year
-    }
-  }
+  let endComponents = calendar.dateComponents([.hour, .minute,.second], from: endTime)
+  let endsOnZero = endComponents.hour == 0
+  && endComponents.minute == 0
+  && endComponents.second == 0
   
-  private static func isAllDayEvent(startTime: Date, endTime: Date) -> Bool {
-    var calendar = Calendar.current
-    calendar.timeZone = TimeZone(abbreviation: "UTC")!
-    
-    let startComponents = calendar.dateComponents([.hour, .minute, .second], from: startTime)
-    let startsOnZero = startComponents.hour == 0
-    && startComponents.minute == 0
-    && startComponents.second == 0
-    
-    let endComponents = calendar.dateComponents([.hour, .minute,.second], from: endTime)
-    let endsOnZero = endComponents.hour == 0
-    && endComponents.minute == 0
-    && endComponents.second == 0
-    
-    return startsOnZero && endsOnZero
+  return startsOnZero && endsOnZero
+}
+
+private func calendarUnit(for repeatPeriod: RepeatPeriod) -> Calendar.Component {
+  switch (repeatPeriod) {
+  case .daily:
+    return .day
+  case .weekly:
+    return .weekOfYear
+  case .monthly:
+    return .month
+  case .annually:
+    return .year
   }
 }

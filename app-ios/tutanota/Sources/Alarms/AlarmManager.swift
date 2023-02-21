@@ -7,7 +7,8 @@ import Foundation
 //
 // Better approach would be to calculate occurences from all alarms, sort them and take
 // the first 64. Or schedule later ones first so that newer ones have higher priority.
-private let EVENTS_SCHEDULED_AHEAD = 24
+private let EVENTS_SCHEDULED_AHEAD = 14
+private let SYSTEM_ALARM_LIMIT = 64
 
 private let MISSED_NOTIFICATION_TTL_SEC: Int64 = 30 * 24 * 60 * 60; // 30 days
 
@@ -173,12 +174,23 @@ class AlarmManager {
   private func rescheduleAlarms() {
     TUTSLog("Re-scheduling alarms")
     DispatchQueue.global(qos: .background).async {
+      var occurrences = [OccurrenceInfo]()
       for notification in self.savedAlarms() {
         do {
-          try self.scheduleAlarm(notification)
+          occurrences += try self.calculateOccurrencesOf(alarm: notification)
         } catch {
           TUTSLog("Error when re-scheduling alarm \(notification) \(error)")
         }
+      }
+      occurrences.sort(by: { $0.occurrenceTime < $1.occurrenceTime })
+
+      for occurrence in occurrences.prefix(SYSTEM_ALARM_LIMIT).reversed() {
+        self.scheduleAlarmOccurrence(
+          occurrenceInfo: occurrence,
+          trigger: occurrence.alarm.alarmInfo.trigger,
+          summary: occurrence.alarm.summary,
+          alarmIdentifier: occurrence.alarm.alarmInfo.alarmIdentifer
+        )
       }
     }
   }
@@ -199,10 +211,10 @@ class AlarmManager {
   ) throws {
     switch alarm.operation {
     case .Create:
-      try self.scheduleAlarm(alarm)
       if !existingAlarms.contains(alarm) {
         existingAlarms.append(alarm)
       }
+      // FIXME reschedule afterwards
     case .Delete:
       let alarmToUnschedule = existingAlarms.first { $0 == alarm } ?? alarm
       do {
@@ -238,32 +250,18 @@ class AlarmManager {
     return "\(origin)/rest/sys/missednotification/\(base64UrlId)"
   }
   
-  private func scheduleAlarm(_ encAlarmNotification: EncryptedAlarmNotification) throws {
+  private func calculateOccurrencesOf(alarm encAlarmNotification: EncryptedAlarmNotification) throws -> [OccurrenceInfo] {
     let sessionKey = self.resolveSessionkey(alarmNotification: encAlarmNotification)
     guard let sessionKey = sessionKey else {
       throw TUTErrorFactory.createError("Cannot resolve session key")
     }
     let alarmNotification = try AlarmNotification(encrypted: encAlarmNotification, sessionKey: sessionKey)
-    var occurrences = [OccurrenceInfo]()
     
     if let repeatRule = alarmNotification.repeatRule {
-      occurrences = try self.iterateRepeatingAlarm(
-        eventStart: alarmNotification.eventStart,
-        eventEnd: alarmNotification.eventEnd,
-        trigger: alarmNotification.alarmInfo.trigger,
-        repeatRule: repeatRule
-      )
+      return try self.iterateRepeatingAlarm(alarm: alarmNotification, repeatRule: repeatRule)
     } else {
-      let singleOcurrence = OccurrenceInfo(occurrence: 0, occurrenceTime: alarmNotification.eventStart)
-      occurrences = [singleOcurrence]
-    }
-    for ocurrence in occurrences {
-      self.scheduleAlarmOccurrence(
-        occurrenceInfo: ocurrence,
-        trigger: alarmNotification.alarmInfo.trigger,
-        summary: alarmNotification.summary,
-        alarmIdentifier: alarmNotification.alarmInfo.alarmIdentifer
-      )
+      let singleOcurrence = OccurrenceInfo(occurrence: 0, occurrenceTime: alarmNotification.eventStart, alarm: alarmNotification)
+      return [singleOcurrence]
     }
   }
   
@@ -278,9 +276,7 @@ class AlarmManager {
     let occurrenceIds: [String]
     if let repeatRule = alarmNotification.repeatRule {
       let ocurrences = try self.iterateRepeatingAlarm(
-        eventStart: alarmNotification.eventStart,
-        eventEnd: alarmNotification.eventEnd,
-        trigger: alarmNotification.alarmInfo.trigger,
+        alarm: alarmNotification,
         repeatRule: repeatRule
       )
       occurrenceIds = ocurrences.map { o in
@@ -314,28 +310,24 @@ class AlarmManager {
   }
   
   private func iterateRepeatingAlarm(
-    eventStart: Date,
-    eventEnd: Date,
-    trigger: String,
+    alarm: AlarmNotification,
     repeatRule: RepeatRule
   ) throws -> [OccurrenceInfo] {
     let now = Date()
-    var occurrences = [OccurrenceInfo]()
-    AlarmModel.iterateRepeatingAlarm(
-      eventStart: eventStart,
-      eventEnd: eventEnd,
+    let occurencesAfterNow = AlarmModel.iterateRepeatingAlarm(
+      eventStart: alarm.eventStart,
+      eventEnd: alarm.eventEnd,
       repeatRule: repeatRule,
-      now: now,
-      localTimeZone: TimeZone.current,
-      scheduleAhead: EVENTS_SCHEDULED_AHEAD
-    ) { occurrence, occurrenceTime in
-      let info = OccurrenceInfo(
-        occurrence: Int(occurrence),
-        occurrenceTime: occurrenceTime
-      )
-      occurrences.append(info)
+      localTimeZone: TimeZone.current
+    )
+      .lazy
+      .filter { $0.occurenceDate > now }
+
+    return occurencesAfterNow
+      .prefix(EVENTS_SCHEDULED_AHEAD)
+      .map { occurrence in
+        return OccurrenceInfo(occurrence: occurrence.occurrenceNumber, occurrenceTime: occurrence.occurenceDate, alarm: alarm)
     }
-    return occurrences
   }
   
   private func scheduleAlarmOccurrence(
@@ -415,6 +407,7 @@ fileprivate func extractSuspensionTime(from httpResponse: HTTPURLResponse) -> UI
 fileprivate struct OccurrenceInfo {
   let occurrence: Int
   let occurrenceTime: Date
+  let alarm: AlarmNotification
 }
 
 fileprivate func ocurrenceIdentifier(alarmIdentifier: String, occurrence: Int) -> String {

@@ -5,7 +5,6 @@ import XCTest
 class AlarmModelTest : XCTestCase {
   func testIteratedRepeatAlarm() {
     let timeZone = "Europe/Berlin"
-    let now = date(2019, 6, 2, 12, timeZone)
     let eventStart = date(2019, 6, 2, 12, timeZone)
     let eventEnd = date(2019, 6, 2, 12, timeZone)
     
@@ -16,16 +15,10 @@ class AlarmModelTest : XCTestCase {
       endCondition: .never
     )
     
-    var occurrences = [Date]()
-    AlarmModel.iterateRepeatingAlarm(
-      eventStart: eventStart,
-      eventEnd: eventEnd,
-      repeatRule: repeatRule,
-      now: now,
-      localTimeZone: TimeZone(identifier: timeZone)!,
-      scheduleAhead: 4) { _, ocurrenceTime in
-        occurrences.append(ocurrenceTime)
-      }
+    let localTimeZone = TimeZone(identifier: timeZone)!
+    let seq = AlarmModel.iterateRepeatingAlarm(eventStart: eventStart, eventEnd: eventEnd, repeatRule: repeatRule, localTimeZone: localTimeZone)
+    let occurrences = seq.prefix(4).map { $0.occurenceDate }
+    
     let expected = [
       date(2019, 6, 2, 12, timeZone),
       date(2019, 6, 9, 12, timeZone),
@@ -38,7 +31,6 @@ class AlarmModelTest : XCTestCase {
   func testIteratesAlLDayeventWithEnd() {
     let timeZone = "Europe/Berlin"
     let repeatRuleTimeZone = "Asia/Anadyr"
-    let now = date(2019, 5, 1, 0, timeZone)
     let eventStart = AlarmModel.allDayDateUTC(date: date(2019, 5, 1, 0, timeZone))
     let eventEnd = AlarmModel.allDayDateUTC(date: date(2019, 5, 2, 0, timeZone))
     let repeatEnd = AlarmModel.allDayDateUTC(date: date(2019, 5, 3, 0, timeZone))
@@ -47,22 +39,16 @@ class AlarmModelTest : XCTestCase {
       interval: 1,
       timeZone: repeatRuleTimeZone,
       endCondition: .untilDate(date: repeatEnd))
+    let localTimeZone = TimeZone(identifier: timeZone)!
     
-    var ocurrences = [Date]()
-    AlarmModel.iterateRepeatingAlarm(
-      eventStart: eventStart,
-      eventEnd: eventEnd,
-      repeatRule: repeatRule,
-      now: now,
-      localTimeZone: TimeZone(identifier: timeZone)!,
-      scheduleAhead: 4) { _, occurrenceTime in
-        ocurrences.append(occurrenceTime)
-      }
+    let seq = AlarmModel.iterateRepeatingAlarm(eventStart: eventStart, eventEnd: eventEnd, repeatRule: repeatRule, localTimeZone: localTimeZone)
+    let occurrences = seq.prefix(4).map { $0.occurenceDate }
+    
     let expected = [
       date(2019, 5, 1, 0, timeZone),
       date(2019, 5, 2, 0, timeZone)
     ]
-    XCTAssertEqual(ocurrences, expected)
+    XCTAssertEqual(occurrences, expected)
   }
 }
 
