@@ -1,9 +1,9 @@
-interface ImapAccount {
+export interface ImapAccount {
 	host: string
-	port: string
+	port: number
 	username: string
-	password: string | null
-	accessToken: string | null
+	password?: string
+	accessToken?: string
 }
 
 export interface MailboxState {
@@ -14,7 +14,7 @@ export interface MailboxState {
 	importedUidToMailMap: Map<number, IdTuple>
 }
 
-export interface ImportSyncState {
+export interface ImapSyncState {
 	imapAccount: ImapAccount
 	maxQuota: number
 	mailboxStates: MailboxState[]
