@@ -1,15 +1,28 @@
-import { getFromMap } from "@tutao/tutanota-utils"
+import { getFromMap, lazyAsync } from "@tutao/tutanota-utils"
 import { ArchiveDataType } from "../../common/TutanotaConstants"
 import { assertWorkerOrNode } from "../../common/Env"
 import { BlobAccessTokenService } from "../../entities/storage/Services"
 import { Blob } from "../../entities/sys/TypeRefs.js"
 import { SomeEntity } from "../../common/EntityTypes"
 import { IServiceExecutor } from "../../common/ServiceRequest"
-import { BlobServerAccessInfo, createBlobAccessTokenPostIn, createBlobReadData, createBlobWriteData, createInstanceId } from "../../entities/storage/TypeRefs"
+import {
+	BlobGetInTypeRef,
+	BlobServerAccessInfo,
+	createBlobAccessTokenPostIn,
+	createBlobReadData,
+	createBlobWriteData,
+	createInstanceId,
+} from "../../entities/storage/TypeRefs"
 import { getElementId, getEtId, getListId, isElementEntity } from "../../common/utils/EntityUtils.js"
 import { DateProvider } from "../../common/DateProvider.js"
+import { resolveTypeReference } from "../../common/EntityFunctions.js"
+import { AuthDataProvider } from "./UserFacade.js"
 
 assertWorkerOrNode()
+
+export interface BlobAccessTokenFactory {
+	requestToken(): Promise<BlobServerAccessInfo>
+}
 
 /**
  * The BlobAccessTokenFacade requests blobAccessTokens from the BlobAccessTokenService to get or post to the BlobService (binary blobs)
@@ -19,16 +32,16 @@ assertWorkerOrNode()
  * Read access tokens for archives are cached, but tokens for reading specific blobs are not cached.
  */
 export class BlobAccessTokenFacade {
-	private readonly serviceExecutor: IServiceExecutor
 	private readonly readCache: Map<Id, BlobServerAccessInfo>
 	private readonly writeCache: Map<ArchiveDataType, Map<Id, BlobServerAccessInfo>>
-	private readonly dateProvider: DateProvider
 
-	constructor(serviceExecutor: IServiceExecutor, dateProvider: DateProvider) {
-		this.serviceExecutor = serviceExecutor
+	constructor(
+		private readonly serviceExecutor: IServiceExecutor,
+		private readonly dateProvider: DateProvider,
+		private readonly authDataProvider: AuthDataProvider,
+	) {
 		this.readCache = new Map<Id, BlobServerAccessInfo>()
 		this.writeCache = new Map()
-		this.dateProvider = dateProvider
 	}
 
 	/**
@@ -137,5 +150,18 @@ export class BlobAccessTokenFacade {
 			throw new Error(`only one archive id allowed, but was ${archiveIds}`)
 		}
 		return blobs[0].archiveId
+	}
+
+	public async createQueryParams(blobAccessTokenFactory: lazyAsync<BlobServerAccessInfo>, additionalRequestParams: Dict): Promise<Dict> {
+		var blobServerAccessInfo = await blobAccessTokenFactory()
+		const BlobGetInTypeModel = await resolveTypeReference(BlobGetInTypeRef)
+		return Object.assign(
+			additionalRequestParams,
+			{
+				blobAccessToken: blobServerAccessInfo.blobAccessToken,
+				v: BlobGetInTypeModel.version,
+			},
+			this.authDataProvider.createAuthHeaders(),
+		)
 	}
 }

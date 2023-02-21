@@ -19,8 +19,6 @@ import { AuthDataProvider } from "../facades/UserFacade"
 import { LoginIncompleteError } from "../../common/error/LoginIncompleteError.js"
 import { BlobServerUrl } from "../../entities/storage/TypeRefs.js"
 import { BlobAccessTokenFacade } from "../facades/BlobAccessTokenFacade.js"
-import { DateProvider } from "../../common/DateProvider.js"
-import { queryParamsFactoryFactory } from "../../common/utils/BlobUtils.js"
 
 assertWorkerOrNode()
 
@@ -93,33 +91,17 @@ export interface EntityRestInterface {
  *
  */
 export class EntityRestClient implements EntityRestInterface {
-	authDataProvider: AuthDataProvider
-	private readonly restClient: RestClient
-	private readonly instanceMapper: InstanceMapper
-	// Crypto Facade is lazy due to circular dependency between EntityRestClient and CryptoFacade
-	private readonly lazyCrypto: lazy<CryptoFacade>
-	private readonly blobAccessTokenFacade: BlobAccessTokenFacade
-	private dateProvider: DateProvider
-
 	get _crypto(): CryptoFacade {
 		return this.lazyCrypto()
 	}
 
 	constructor(
-		authDataProvider: AuthDataProvider,
-		restClient: RestClient,
-		crypto: lazy<CryptoFacade>,
-		instanceMapper: InstanceMapper,
-		blobAccessTokenFacade: BlobAccessTokenFacade,
-		dateProvider: DateProvider,
-	) {
-		this.authDataProvider = authDataProvider
-		this.restClient = restClient
-		this.lazyCrypto = crypto
-		this.instanceMapper = instanceMapper
-		this.blobAccessTokenFacade = blobAccessTokenFacade
-		this.dateProvider = dateProvider
-	}
+		private readonly authDataProvider: AuthDataProvider,
+		private readonly restClient: RestClient,
+		private readonly lazyCrypto: lazy<CryptoFacade>,
+		private readonly instanceMapper: InstanceMapper,
+		private readonly blobAccessTokenFacade: BlobAccessTokenFacade,
+	) {}
 
 	async load<T extends SomeEntity>(
 		typeRef: TypeRef<T>,
@@ -207,22 +189,18 @@ export class EntityRestClient implements EntityRestInterface {
 		if (listId == null) {
 			throw new Error("archiveId must be set to load BlobElementTypes")
 		}
-		const accessInfoFactory = () => this.blobAccessTokenFacade.requestReadTokenArchive(null, listId)
-		const { queryParamsFactory, servers } = await queryParamsFactoryFactory(
-			accessInfoFactory,
-			Object.assign(
-				{},
-				headers, // prevent CORS request due to non standard header usage
-				queryParams,
-			),
-			this.dateProvider,
-			this.authDataProvider,
+		const blobAccesssTokenFactory = () => this.blobAccessTokenFacade.requestReadTokenArchive(null, listId)
+		const blobServerAccessInfo = await blobAccesssTokenFactory()
+		const additionalRequestParams = Object.assign(
+			{},
+			headers, // prevent CORS request due to non standard header usage
+			queryParams,
 		)
 		return tryServers(
-			servers,
+			blobServerAccessInfo.servers,
 			async (serverUrl) =>
 				this.restClient.request(path, HttpMethod.GET, {
-					queryParams: queryParamsFactory,
+					queryParams: () => this.blobAccessTokenFacade.createQueryParams(blobAccesssTokenFactory, additionalRequestParams),
 					headers: {}, // prevent CORS request due to non standard header usage
 					responseType: MediaType.Json,
 					baseUrl: serverUrl,

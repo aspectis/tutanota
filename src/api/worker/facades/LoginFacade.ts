@@ -802,7 +802,6 @@ export class LoginFacade {
 			() => this.cryptoFacade,
 			this.instanceMapper,
 			this.blobAccessTokenFacade,
-			new DateProviderImpl(),
 		)
 		const entityClient = new EntityClient(eventRestClient)
 		return this.serviceExecutor
