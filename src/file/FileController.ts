@@ -7,16 +7,20 @@ import { lang, TranslationKey } from "../misc/LanguageViewModel"
 import { BrowserType } from "../misc/ClientConstants"
 import { client } from "../misc/ClientDetector"
 import { File as TutanotaFile } from "../api/entities/tutanota/TypeRefs.js"
+import { Blob as TutanotaBlob } from "../api/entities/sys/TypeRefs.js"
 import { deduplicateFilenames, FileReference, sanitizeFilename } from "../api/common/utils/FileUtils"
 import { isOfflineError } from "../api/common/utils/ErrorCheckUtils.js"
 import { FileFacade } from "../api/worker/facades/lazy/FileFacade.js"
 import { BlobFacade } from "../api/worker/facades/lazy/BlobFacade.js"
 import { ArchiveDataType } from "../api/common/TutanotaConstants.js"
 import stream from "mithril/stream"
+import Stream from "mithril/stream"
 import { showProgressDialog } from "../gui/dialogs/ProgressDialog.js"
 import { CancelledError } from "../api/common/error/CancelledError.js"
 import { ConnectionError } from "../api/common/error/RestError.js"
-import Stream from "mithril/stream"
+import { elementIdPart, listIdPart } from "../api/common/utils/EntityUtils.js"
+import { SomeEntity } from "../api/common/EntityTypes.js"
+import { BlobReferencingInstance } from "../api/worker/facades/BlobAccessTokenFacade.js"
 
 assertMainOrNode()
 export const CALENDAR_MIME_TYPE = "text/calendar"
@@ -308,8 +312,25 @@ export async function downloadAndDecryptDataFile(file: TutanotaFile, fileFacade:
 	if (isLegacyFile(file)) {
 		return await fileFacade.downloadFileContent(file)
 	} else {
-		const bytes = await blobFacade.downloadAndDecrypt(ArchiveDataType.Attachments, file.blobs, file)
+		const bytes = await blobFacade.downloadAndDecrypt(ArchiveDataType.Attachments, createReferencingInstance(file))
 		return convertToDataFile(file, bytes)
+	}
+}
+
+export function createReferencingInstance(tutanotaFile: TutanotaFile): BlobReferencingInstance {
+	return {
+		getBlobs(): TutanotaBlob[] {
+			return tutanotaFile.blobs
+		},
+		getElementId(): Id {
+			return elementIdPart(tutanotaFile._id)
+		},
+		getListId(): Id | null {
+			return listIdPart(tutanotaFile._id)
+		},
+		getEntity(): SomeEntity {
+			return tutanotaFile
+		},
 	}
 }
 

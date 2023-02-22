@@ -104,7 +104,7 @@ o.spec("EntityRestClient", async function () {
 		}
 
 		dateProvider = instance(DateProviderImpl)
-		entityRestClient = new EntityRestClient(authDataProvider, restClient, () => cryptoFacadeMock, instanceMapperMock, blobAccessTokenFacade, dateProvider)
+		entityRestClient = new EntityRestClient(authDataProvider, restClient, () => cryptoFacadeMock, instanceMapperMock, blobAccessTokenFacade)
 	})
 
 	function assertThatNoRequestsWereMade() {
@@ -336,7 +336,7 @@ o.spec("EntityRestClient", async function () {
 			const firstServer = "firstServer"
 
 			const blobAccessToken = "123"
-			when(blobAccessTokenFacade.requestReadTokenArchive(anything(), archiveId)).thenResolve(
+			when(blobAccessTokenFacade.requestReadTokenArchive(archiveId)).thenResolve(
 				createBlobServerAccessInfo({
 					blobAccessToken,
 					servers: [createBlobServerUrl({ url: firstServer }), createBlobServerUrl({ url: "otherServer" })],
@@ -372,7 +372,7 @@ o.spec("EntityRestClient", async function () {
 
 			const blobAccessToken = "123"
 			const otherServer = "otherServer"
-			when(blobAccessTokenFacade.requestReadTokenArchive(anything(), archiveId)).thenResolve(
+			when(blobAccessTokenFacade.requestReadTokenArchive(archiveId)).thenResolve(
 				createBlobServerAccessInfo({
 					blobAccessToken,
 					servers: [createBlobServerUrl({ url: firstServer }), createBlobServerUrl({ url: otherServer })],
@@ -423,7 +423,7 @@ o.spec("EntityRestClient", async function () {
 			}
 
 			verify(restClient.request(anything(), anything(), anything()), { times: 0 })
-			verify(blobAccessTokenFacade.requestReadTokenArchive(anything(), anything()), { times: 0 })
+			verify(blobAccessTokenFacade.requestReadTokenArchive(anything()), { times: 0 })
 
 			o(result).equals(null)
 		})

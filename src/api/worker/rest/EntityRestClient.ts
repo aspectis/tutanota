@@ -189,7 +189,7 @@ export class EntityRestClient implements EntityRestInterface {
 		if (listId == null) {
 			throw new Error("archiveId must be set to load BlobElementTypes")
 		}
-		const blobAccesssTokenFactory = () => this.blobAccessTokenFacade.requestReadTokenArchive(null, listId)
+		const blobAccesssTokenFactory = () => this.blobAccessTokenFacade.requestReadTokenArchive(listId)
 		const blobServerAccessInfo = await blobAccesssTokenFactory()
 		const additionalRequestParams = Object.assign(
 			{},

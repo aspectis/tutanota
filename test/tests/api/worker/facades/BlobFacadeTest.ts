@@ -6,8 +6,8 @@ import { NativeFileApp } from "../../../../../src/native/common/FileApp.js"
 import { AesApp } from "../../../../../src/native/worker/AesApp.js"
 import { InstanceMapper } from "../../../../../src/api/worker/crypto/InstanceMapper.js"
 import { ArchiveDataType, MAX_BLOB_SIZE_BYTES } from "../../../../../src/api/common/TutanotaConstants.js"
-import { createBlob, createBlobReferenceTokenWrapper } from "../../../../../src/api/entities/sys/TypeRefs.js"
-import { createFile } from "../../../../../src/api/entities/tutanota/TypeRefs.js"
+import {Blob as TutanotaBlob, createBlob, createBlobReferenceTokenWrapper} from "../../../../../src/api/entities/sys/TypeRefs.js"
+import { createFile, File as TutanotaFile } from "../../../../../src/api/entities/tutanota/TypeRefs.js"
 import { ServiceExecutor } from "../../../../../src/api/worker/rest/ServiceExecutor.js"
 import { instance, matchers, object, verify, when } from "testdouble"
 import { HttpMethod } from "../../../../../src/api/common/EntityFunctions.js"
@@ -21,9 +21,11 @@ import { ProgrammingError } from "../../../../../src/api/common/error/Programmin
 import { createBlobPostOut, createBlobServerAccessInfo, createBlobServerUrl } from "../../../../../src/api/entities/storage/TypeRefs.js"
 import storageModelInfo from "../../../../../src/api/entities/storage/ModelInfo.js"
 import type { AuthDataProvider } from "../../../../../src/api/worker/facades/UserFacade.js"
-import { BlobAccessTokenFacade } from "../../../../../src/api/worker/facades/BlobAccessTokenFacade.js"
+import {BlobAccessTokenFacade, BlobReferencingInstance} from "../../../../../src/api/worker/facades/BlobAccessTokenFacade.js"
 import {DateProvider} from "../../../../../src/api/common/DateProvider.js"
 import {DateProviderImpl} from "../../../../../src/calendar/date/CalendarUtils.js"
+import {elementIdPart, listIdPart} from "../../../../../src/api/common/utils/EntityUtils.js"
+import {SomeEntity} from "../../../../../src/api/common/EntityTypes.js"
 
 const { anything, captor } = matchers
 
@@ -154,13 +156,13 @@ o.spec("BlobFacade test", function () {
 			const encryptedBlobData = aes128Encrypt(sessionKey, blobData, generateIV(), true, true)
 
 			let blobAccessInfo = createBlobServerAccessInfo({ blobAccessToken: "123", servers: [createBlobServerUrl({ url: "w1" })] })
-			when(blobAccessTokenFacade.requestReadTokenBlobs(anything(), anything(), anything())).thenResolve(blobAccessInfo)
+			when(blobAccessTokenFacade.requestReadTokenBlobs(anything(), anything())).thenResolve(blobAccessInfo)
 			when(cryptoFacadeMock.resolveSessionKeyForInstance(file)).thenResolve(sessionKey)
 			const requestBody = { "request-body": true }
 			when(instanceMapperMock.encryptAndMapToLiteral(anything(), anything(), anything())).thenResolve(requestBody)
 			when(restClientMock.request(BLOB_SERVICE_REST_PATH, HttpMethod.GET, anything())).thenResolve(encryptedBlobData)
 
-			const decryptedData = await blobFacade.downloadAndDecrypt(archiveDataType, [blobs[0]], file)
+			const decryptedData = await blobFacade.downloadAndDecrypt(archiveDataType, wrapTutanotaFile(file))
 
 			o(arrayEquals(decryptedData, blobData)).equals(true)
 			const optionsCaptor = captor()
@@ -180,7 +182,7 @@ o.spec("BlobFacade test", function () {
 				blobAccessToken: "123",
 				servers: [createBlobServerUrl({ url: "http://w1.api.tutanota.com" })],
 			})
-			when(blobAccessTokenFacade.requestReadTokenBlobs(anything(), anything(), anything())).thenResolve(blobAccessInfo)
+			when(blobAccessTokenFacade.requestReadTokenBlobs(anything(), anything())).thenResolve(blobAccessInfo)
 			when(cryptoFacadeMock.resolveSessionKeyForInstance(file)).thenResolve(sessionKey)
 			const requestBody = { "request-body": true }
 			const encryptedFileUri = "encryptedUri"
@@ -195,7 +197,7 @@ o.spec("BlobFacade test", function () {
 			when(fileAppMock.getSize(decryptedUri)).thenResolve(size)
 			env.mode = Mode.Desktop
 
-			const decryptedFileReference = await blobFacade.downloadAndDecryptNative(archiveDataType, [blobs[0]], file, name, mimeType)
+			const decryptedFileReference = await blobFacade.downloadAndDecryptNative(archiveDataType, wrapTutanotaFile(file), name, mimeType)
 
 			const expectedFileReference: FileReference = {
 				_type: "FileReference",
@@ -228,7 +230,7 @@ o.spec("BlobFacade test", function () {
 				blobAccessToken: "123",
 				servers: [createBlobServerUrl({ url: "http://w1.api.tutanota.com" })],
 			})
-			when(blobAccessTokenFacade.requestReadTokenBlobs(anything(), anything(), anything())).thenResolve(blobAccessInfo)
+			when(blobAccessTokenFacade.requestReadTokenBlobs(anything(), anything())).thenResolve(blobAccessInfo)
 			when(cryptoFacadeMock.resolveSessionKeyForInstance(file)).thenResolve(sessionKey)
 			const requestBody = { "request-body": true }
 			const encryptedFileUri = "encryptedUri"
@@ -244,9 +246,26 @@ o.spec("BlobFacade test", function () {
 			when(fileAppMock.getSize(decryptedUri)).thenResolve(size)
 			env.mode = Mode.Desktop
 
-			await assertThrows(ProgrammingError, () => blobFacade.downloadAndDecryptNative(archiveDataType, [blobs[0], blobs[1]], file, name, mimeType))
+			await assertThrows(ProgrammingError, () => blobFacade.downloadAndDecryptNative(archiveDataType, wrapTutanotaFile(file), name, mimeType))
 			verify(fileAppMock.deleteFile(encryptedFileUri))
 			verify(fileAppMock.deleteFile(decryptedChunkUri))
 		})
 	})
 })
+
+function wrapTutanotaFile(tutanotaFile: TutanotaFile) : BlobReferencingInstance{
+	return {
+		getBlobs(): TutanotaBlob[] {
+			return tutanotaFile.blobs
+		},
+		getElementId(): Id {
+			return elementIdPart(tutanotaFile._id)
+		},
+		getListId(): Id | null {
+			return listIdPart(tutanotaFile._id)
+		},
+		getEntity(): SomeEntity {
+			return tutanotaFile
+		},
+	}
+}

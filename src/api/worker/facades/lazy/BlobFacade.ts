@@ -15,13 +15,12 @@ import { Aes128Key } from "@tutao/tutanota-crypto/dist/encryption/Aes.js"
 import { Blob, BlobReferenceTokenWrapper, createBlobReferenceTokenWrapper } from "../../../entities/sys/TypeRefs.js"
 import { FileReference } from "../../../common/utils/FileUtils.js"
 import { handleRestError } from "../../../common/error/RestError.js"
-import { SomeEntity } from "../../../common/EntityTypes.js"
 import { ProgrammingError } from "../../../common/error/ProgrammingError.js"
 import { IServiceExecutor } from "../../../common/ServiceRequest.js"
 import { BlobGetInTypeRef, BlobPostOut, BlobPostOutTypeRef, BlobServerAccessInfo, createBlobGetIn } from "../../../entities/storage/TypeRefs.js"
 import { AuthDataProvider } from "../UserFacade.js"
 import { tryServers } from "../../rest/EntityRestClient.js"
-import { BlobAccessTokenFacade } from "../BlobAccessTokenFacade.js"
+import { BlobAccessTokenFacade, BlobReferencingInstance } from "../BlobAccessTokenFacade.js"
 import { DateProvider } from "../../common/DateProvider.js"
 
 assertWorkerOrNode()
@@ -97,10 +96,10 @@ export class BlobFacade {
 	 * @param referencingInstance that directly references the blobs
 	 * @returns Uint8Array unencrypted binary data
 	 */
-	async downloadAndDecrypt(archiveDataType: ArchiveDataType, blobs: Blob[], referencingInstance: SomeEntity): Promise<Uint8Array> {
-		const blobAccessInfoFactory = () => this.blobAccessTokenFacade.requestReadTokenBlobs(archiveDataType, blobs, referencingInstance)
-		const sessionKey = neverNull(await this.cryptoFacade.resolveSessionKeyForInstance(referencingInstance))
-		const blobData = await promiseMap(blobs, (blob) => this.downloadAndDecryptChunk(blob, blobAccessInfoFactory, sessionKey))
+	async downloadAndDecrypt(archiveDataType: ArchiveDataType, referencingInstance: BlobReferencingInstance): Promise<Uint8Array> {
+		const blobAccessInfoFactory = () => this.blobAccessTokenFacade.requestReadTokenBlobs(archiveDataType, referencingInstance)
+		const sessionKey = neverNull(await this.cryptoFacade.resolveSessionKeyForInstance(referencingInstance.getEntity()))
+		const blobData = await promiseMap(referencingInstance.getBlobs(), (blob) => this.downloadAndDecryptChunk(blob, blobAccessInfoFactory, sessionKey))
 		return concat(...blobData)
 	}
 
@@ -117,19 +116,18 @@ export class BlobFacade {
 	 */
 	async downloadAndDecryptNative(
 		archiveDataType: ArchiveDataType,
-		blobs: Blob[],
-		referencingInstance: SomeEntity,
+		referencingInstance: BlobReferencingInstance,
 		fileName: string,
 		mimeType: string,
 	): Promise<FileReference> {
 		if (!isApp() && !isDesktop()) {
 			throw new ProgrammingError("Environment is not app or Desktop!")
 		}
-		const blobAccessInfoFactory = () => this.blobAccessTokenFacade.requestReadTokenBlobs(archiveDataType, blobs, referencingInstance)
-		const sessionKey = neverNull(await this.cryptoFacade.resolveSessionKeyForInstance(referencingInstance))
+		const blobAccessInfoFactory = () => this.blobAccessTokenFacade.requestReadTokenBlobs(archiveDataType, referencingInstance)
+		const sessionKey = neverNull(await this.cryptoFacade.resolveSessionKeyForInstance(referencingInstance.getEntity()))
 		const decryptedChunkFileUris: FileUri[] = []
 		let looped = 0
-		for (const blob of blobs) {
+		for (const blob of referencingInstance.getBlobs()) {
 			looped++
 			try {
 				decryptedChunkFileUris.push(await this.downloadAndDecryptChunkNative(blob, blobAccessInfoFactory, sessionKey))
