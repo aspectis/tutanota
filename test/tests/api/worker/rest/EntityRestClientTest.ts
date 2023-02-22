@@ -347,14 +347,36 @@ o.spec("EntityRestClient", async function () {
 
 			const result = await entityRestClient.loadMultiple(MailDetailsBlobTypeRef, archiveId, ids)
 
+			let expectedOptions = {
+				headers: {},
+				queryParams: { ids: "0,1,2,3,4", ...authHeader, blobAccessToken, v: String(tutanotaModelInfo.version) },
+				responseType: MediaType.Json,
+				noCORS: true,
+				baseUrl: firstServer,
+			}
 			verify(
-				restClient.request(`${typeRefToPath(MailDetailsBlobTypeRef)}/${archiveId}`, HttpMethod.GET, {
-					headers: {},
-					queryParams: { ids: "0,1,2,3,4", ...authHeader, blobAccessToken, v: String(tutanotaModelInfo.version) },
-					responseType: MediaType.Json,
-					noCORS: true,
-					baseUrl: firstServer,
-				}),
+				restClient.request(
+					`${typeRefToPath(MailDetailsBlobTypeRef)}/${archiveId}`,
+					HttpMethod.GET,
+					argThat((optionsArg) => {
+						o(optionsArg.headers).deepEquals(expectedOptions.headers)("headers")
+						o(optionsArg.responseType).equals(expectedOptions.responseType)("responseType")
+						o(optionsArg.baseUrl).equals(expectedOptions.baseUrl)("baseUrl")
+						o(optionsArg.noCORS).equals(expectedOptions.noCORS)("noCORS")
+						const queryParams = optionsArg.queryParams()
+						verify(
+							blobAccessTokenFacade.createQueryParams(
+								argThat((factory) => {
+									const info = factory()
+									verify(blobAccessTokenFacade.requestReadTokenArchive(archiveId))
+									return true
+								}),
+								{ ...authHeader, ids: "0,1,2,3,4", v: String(tutanotaModelInfo.version) },
+							),
+						)
+						return true
+					}),
+				),
 			)
 
 			// There's some weird optimization for list requests where the types to migrate
