@@ -3,7 +3,7 @@ import {AdSyncEventListener} from "./AdSyncEventListener.js"
 import {ImapFlow} from 'imapflow';
 import {ImapAccount} from "./ImapSyncState.js"
 import {SyncSessionEventListener} from "./ImapSyncSession.js"
-import fs from "fs"
+import {ImapMail, ImapMailAttachement, ImapMailEnvelope} from "./ImapMail.js"
 
 export enum SyncSessionProcessState {
 	STOPPED,
@@ -63,27 +63,42 @@ export class ImapSyncSessionProcess {
 				}
 			)
 
-			let elmStartTime = Date.now()
+			let mailFetchStartTime = Date.now()
 			for await (let mail of fetchQuery) {
 				// @ts-ignore
-				let {bodyMeta, bodyContent} = await imapClient.download(`${mail.uid}`)
-				let elmEndTime = Date.now()
+				// We can download in steps or get a full rfc822 formatted message
+				let {rfc822Meta, rfc822Content} = await imapClient.download(`${mail.uid}`)
+				// need a rfc822 reader library or use parts downloader.
+				let mailFetchEndTime = Date.now()
 
-				let elmFetchTime = elmEndTime - elmStartTime
+				let mailFetchTime = mailFetchEndTime - mailFetchStartTime
 
-				this.syncSessionMailbox.currentThroughput = mail.size / elmFetchTime // TODO What type / unit has mail.size?
+				this.syncSessionMailbox.currentThroughput = mail.size / mailFetchTime // TODO What type / unit has mail.size?
 				this.syncSessionEventListener.onEfficiencyScoreMeasured(this.processId, this.syncSessionMailbox.normalizedEfficiencyScore, mail.size)
 
-				//TODO What do I do with this?
-				bodyContent.pipe(fs.createWriteStream(bodyMeta.filename))
+				let bodyText = "some rfc822 formatted string"
+				let attachment = new ImapMailAttachement(1, "test", new Buffer("stsdf"))
 
-				// TODO Convert to ImapMail?
-				adSyncEventListener.onMail(mail)
+				// TODO use emailId when uid is not reliable
+				let imapMail = new ImapMail(mail.uid)
+					.setModSeq(mail.modseq)
+					.setSize(mail.size)
+					.setInternalDate(mail.internalDate)
+					.setFlags(mail.flags)
+					.setLabels(mail.labels)
+					.setEnvelope(ImapMailEnvelope.fromMessageEnvelopeObject(mail.envelope))
+					.setBodyText(bodyText)
+					.setAttachments([attachment])
+					.setHeaders(mail.headers)
 
-				elmStartTime = Date.now()
+				//TODO Check if mail is already existing in sync state
+				adSyncEventListener.onMail(imapMail)
+
+				mailFetchStartTime = Date.now()
 			}
 		} finally {
 			lock.release()
+			this.syncSessionEventListener.onFinish(this.processId, this.syncSessionMailbox)
 		}
 	}
 

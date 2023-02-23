@@ -5,6 +5,8 @@ import {ImapSyncSessionProcess} from "./ImapSyncSessionProcess.js"
 
 export interface SyncSessionEventListener {
 	onEfficiencyScoreMeasured(processId: number, efficiencyScore: number, downloadedQuota: number): void
+
+	onFinish(processId: number, syncSessionMailbox: SyncSessionMailbox): void
 }
 
 export enum SyncSessionState {
@@ -73,6 +75,11 @@ export class ImapSyncSession implements SyncSessionEventListener {
 	onEfficiencyScoreMeasured(processId: number, efficiencyScore: number, downloadedQuota: number): void {
 		this.efficiencyScores.set(processId, efficiencyScore)
 		this.downloadedQuota += downloadedQuota
+	}
+
+	onFinish(processId: number, syncSessionMailbox: SyncSessionMailbox): void {
+		// TODO If all mailboxes are finished call adSyncEventListener.onFinish()
+		// Otherwise open new mailbox
 	}
 
 	get minEfficiencyScore(): number {
