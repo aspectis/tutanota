@@ -91,7 +91,7 @@ export async function handleUncaughtErrorImpl(e: Error) {
 		const { userId } = logins.getUserController()
 		if (isDesktop()) {
 			await locator.interWindowEventSender?.localUserDataInvalidated(userId)
-			await locator.sqlCipherFacade?.deleteDb(userId)
+			await locator.worker.getWorkerInterface().sqlCipherFacade.deleteDb(userId)
 		}
 		await logins.logout(false)
 		await windowFacade.reload({ noAutoLogin: true })
@@ -207,7 +207,7 @@ export async function reloginForExpiredSession() {
 				}
 				// Fetch old credentials to preserve database key if it's there
 				const oldCredentials = await locator.credentialsProvider.getCredentialsByUserId(userId)
-				await locator.sqlCipherFacade?.closeDb()
+				await locator.worker.getWorkerInterface().sqlCipherFacade?.closeDb()
 				await locator.credentialsProvider.deleteByUserId(userId, { deleteOfflineDb: false })
 				if (sessionType === SessionType.Persistent) {
 					await locator.credentialsProvider.store({ credentials: credentials, databaseKey: oldCredentials?.databaseKey })

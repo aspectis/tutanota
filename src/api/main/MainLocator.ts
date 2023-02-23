@@ -139,7 +139,6 @@ class MainLocator {
 	workerFacade!: WorkerFacade
 	loginListener!: PageContextLoginListener
 	random!: WorkerRandomizer
-	sqlCipherFacade!: SqlCipherFacade
 	connectivityModel!: WebsocketConnectivityModel
 	operationProgressTracker!: OperationProgressTracker
 	infoMessageHandler!: InfoMessageHandler
@@ -446,6 +445,7 @@ class MainLocator {
 			eventBus,
 			entropyFacade,
 			workerFacade,
+			sqlCipherFacade,
 		} = this.worker.getWorkerInterface()
 		this.loginFacade = loginFacade
 		this.customerFacade = customerFacade
@@ -509,9 +509,6 @@ class MainLocator {
 			} else if (isAndroidApp() || isIOSApp()) {
 				this.webAuthn = new WebauthnClient(new WebAuthnFacadeSendDispatcher(this.native), getWebRoot())
 			}
-			if (isOfflineStorageAvailable()) {
-				this.sqlCipherFacade = this.nativeInterfaces.sqlCipherFacade
-			}
 		}
 
 		if (this.webAuthn == null) {
@@ -522,7 +519,7 @@ class MainLocator {
 		this.credentialsProvider = await createCredentialsProvider(
 			deviceEncryptionFacade,
 			this.nativeInterfaces?.native ?? null,
-			this.nativeInterfaces?.sqlCipherFacade ?? null,
+			sqlCipherFacade ?? null,
 			isDesktop() ? this.interWindowEventSender : null,
 		)
 		this.random = random
