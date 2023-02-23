@@ -1,6 +1,6 @@
 import {SyncSessionMailbox} from "./SyncSessionMailbox.js"
 import {AdSyncEventListener} from "./AdSyncEventListener.js"
-import {ImapFlow} from 'imapflow';
+import {ImapFlow, Readable} from 'imapflow';
 import {ImapAccount} from "./ImapSyncState.js"
 import {SyncSessionEventListener} from "./ImapSyncSession.js"
 import {ImapMail, ImapMailAttachement, ImapMailEnvelope} from "./ImapMail.js"
@@ -36,7 +36,7 @@ export class ImapSyncSessionProcess {
 				accessToken: this.imapAccount.accessToken
 			},
 			// @ts-ignore
-			qresync: true, // TODO Type definitions
+			qresync: true, // TODO type definitions
 		})
 
 		try {
@@ -58,26 +58,59 @@ export class ImapSyncSessionProcess {
 				`${lastUid}:*`,
 				{
 					uid: true,
-					// @ts-ignore // TODO Types!
+					size: true,
+					internalDate: true,
+					flags: true,
+					labels: true,
+					envelope: true,
+					bodyStructure: true,
+					headers: true,
+				},
+				{
+					uid: true,
+					// @ts-ignore // TODO type definitions
 					changedSince: this.syncSessionMailbox.mailboxState.highestModSeq
-				}
+				},
 			)
 
 			let mailFetchStartTime = Date.now()
 			for await (let mail of fetchQuery) {
-				// @ts-ignore
-				// We can download in steps or get a full rfc822 formatted message
-				let {rfc822Meta, rfc822Content} = await imapClient.download(`${mail.uid}`)
-				// need a rfc822 reader library or use parts downloader.
-				let mailFetchEndTime = Date.now()
 
+				let attachmentBodyParts = mail.bodyStructure.childNodes
+				let attachmentBodyPartNumbers = attachmentBodyParts.map(bodyStructure => bodyStructure.part)
+
+				let bodyTextDownloadObject = await imapClient.download(
+					`${mail.uid}`,
+					mail.bodyStructure.part,
+					{
+						uid: true,
+					}
+				)
+
+				// @ts-ignore // TODO type definitions
+				let attachmentDownloadObjects = await imapClient.downloadMany(
+					`${mail.uid}`,
+					attachmentBodyPartNumbers,
+					{
+						uid: true,
+					}
+				)
+
+				let mailFetchEndTime = Date.now()
 				let mailFetchTime = mailFetchEndTime - mailFetchStartTime
 
 				this.syncSessionMailbox.currentThroughput = mail.size / mailFetchTime // TODO What type / unit has mail.size?
 				this.syncSessionEventListener.onEfficiencyScoreMeasured(this.processId, this.syncSessionMailbox.normalizedEfficiencyScore, mail.size)
 
-				let bodyText = "some rfc822 formatted string"
-				let attachment = new ImapMailAttachement(1, "test", new Buffer("stsdf"))
+				let bodyText = (await this.readableToBuffer(bodyTextDownloadObject.content)).toString()
+
+				let attachments: ImapMailAttachement[] = []
+				for (const attachmentDownloadObject of attachmentDownloadObjects) {
+					let meta = attachmentDownloadObject.meta
+					let binary = await this.readableToBuffer(attachmentDownloadObject.content)
+					let attachment = new ImapMailAttachement(meta.expectedSize, meta.contentType, binary)
+					attachments.push(attachment)
+				}
 
 				// TODO use emailId when uid is not reliable
 				let imapMail = new ImapMail(mail.uid)
@@ -88,11 +121,15 @@ export class ImapSyncSessionProcess {
 					.setLabels(mail.labels)
 					.setEnvelope(ImapMailEnvelope.fromMessageEnvelopeObject(mail.envelope))
 					.setBodyText(bodyText)
-					.setAttachments([attachment])
+					.setAttachments(attachments)
 					.setHeaders(mail.headers)
 
-				//TODO Check if mail is already existing in sync state
-				adSyncEventListener.onMail(imapMail)
+				// TODO What happens if only flags updated but IMAP server does not support QRESYNC?
+				if (this.syncSessionMailbox.mailboxState.importedUidToMailMap.has(mail.uid)) {
+					adSyncEventListener.onMailUpdate(imapMail)
+				} else {
+					adSyncEventListener.onMail(imapMail)
+				}
 
 				mailFetchStartTime = Date.now()
 			}
@@ -106,4 +143,16 @@ export class ImapSyncSessionProcess {
 		this.state = SyncSessionProcessState.STOPPED
 		return this.syncSessionMailbox
 	}
+
+	// TODO Move to Utils?
+	private readableToBuffer(readable: Readable): Promise<Buffer> {
+		const chunks: Buffer[] = []
+		return new Promise((resolve, reject) => {
+			readable.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+			readable.on('error', (err) => reject(err));
+			readable.on('end', () => resolve(Buffer.concat(chunks)));
+		})
+	}
+
+
 }

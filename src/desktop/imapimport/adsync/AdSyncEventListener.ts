@@ -4,11 +4,13 @@ import {ImapError} from "./ImapError.js"
 
 export interface AdSyncEventListener {
 
-	onMailbox(mailbox: ImapMailbox): void
+	onMailbox(newMailbox: ImapMailbox): void
 
-	onMail(mail: ImapMail): void
+	onMailboxUpdate(updatedMailbox: ImapMailbox): void
 
-	onMailBatch(mails: ImapMail[]): void
+	onMail(newMail: ImapMail): void
+
+	onMailUpdate(updatedMail: ImapMail): void
 
 	onPostpone(postponedUntil: Date): void
 

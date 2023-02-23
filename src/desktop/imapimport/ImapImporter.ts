@@ -1,5 +1,3 @@
-import {ImportMailFacade} from "./facades/ImportMailFacade.js";
-import {ImportImapFacade} from "./facades/ImportImapFacade.js";
 import {ImapAdSync} from "./adsync/ImapAdSync.js";
 import {ImapImportState, ImportState} from "./ImapImportState.js";
 import {AdSyncEventListener} from "./adsync/AdSyncEventListener.js"
@@ -14,9 +12,11 @@ export class ImapImporter implements AdSyncEventListener {
 	private imapImportState: ImapImportState = new ImapImportState(ImportState.PAUSED, new Date(Date.now()))
 
 	constructor(
-		private readonly importMailFacade: ImportMailFacade,
-		private readonly importImapFacade: ImportImapFacade,
+		//private readonly importMailFacade: ImportMailFacade,
+		//private readonly importImapFacade: ImportImapFacade,
+		imapAdSync: ImapAdSync,
 	) {
+		this.imapAdSync = imapAdSync
 	}
 
 	async continueImport(): Promise<ImportState> {
@@ -47,9 +47,8 @@ export class ImapImporter implements AdSyncEventListener {
 	}
 
 	onMail(mail: ImapMail): void {
-	}
-
-	onMailBatch(mails: ImapMail[]): void {
+		console.log("Nice!")
+		console.log(mail)
 	}
 
 	onPostpone(postponedUntil: Date): void {
@@ -59,5 +58,11 @@ export class ImapImporter implements AdSyncEventListener {
 	}
 
 	onError(error: ImapError): void {
+	}
+
+	onMailUpdate(updatedMail: ImapMail): void {
+	}
+
+	onMailboxUpdate(updatedMailbox: ImapMailbox): void {
 	}
 }

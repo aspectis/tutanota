@@ -1,62 +1,65 @@
-import { mp } from "./DesktopMonkeyPatch"
-import { err } from "./DesktopErrorHandler"
-import { DesktopConfig } from "./config/DesktopConfig"
+import {mp} from "./DesktopMonkeyPatch"
+import {err} from "./DesktopErrorHandler"
+import {DesktopConfig} from "./config/DesktopConfig"
 import * as electron from "electron"
-import { app } from "electron"
-import { DesktopUtils } from "./DesktopUtils"
-import { setupAssetProtocol, WindowManager } from "./DesktopWindowManager"
-import { DesktopNotifier } from "./DesktopNotifier"
-import { ElectronUpdater } from "./ElectronUpdater.js"
-import { DesktopSseClient } from "./sse/DesktopSseClient"
-import { Socketeer } from "./Socketeer"
-import { DesktopAlarmStorage } from "./sse/DesktopAlarmStorage"
-import { DesktopAlarmScheduler } from "./sse/DesktopAlarmScheduler"
-import { lang } from "../misc/LanguageViewModel"
-import { DesktopNetworkClient } from "./net/DesktopNetworkClient.js"
-import { DesktopNativeCryptoFacade } from "./DesktopNativeCryptoFacade"
-import { DesktopDownloadManager } from "./net/DesktopDownloadManager.js"
-import { DesktopTray } from "./tray/DesktopTray"
-import { log } from "./DesktopLog"
-import { UpdaterWrapperImpl } from "./UpdaterWrapper"
-import { ElectronNotificationFactory } from "./NotificatonFactory"
-import { KeytarSecretStorage } from "./sse/SecretStorage"
+import {app} from "electron"
+import {DesktopUtils} from "./DesktopUtils"
+import {setupAssetProtocol, WindowManager} from "./DesktopWindowManager"
+import {DesktopNotifier} from "./DesktopNotifier"
+import {ElectronUpdater} from "./ElectronUpdater.js"
+import {DesktopSseClient} from "./sse/DesktopSseClient"
+import {Socketeer} from "./Socketeer"
+import {DesktopAlarmStorage} from "./sse/DesktopAlarmStorage"
+import {DesktopAlarmScheduler} from "./sse/DesktopAlarmScheduler"
+import {lang} from "../misc/LanguageViewModel"
+import {DesktopNetworkClient} from "./net/DesktopNetworkClient.js"
+import {DesktopNativeCryptoFacade} from "./DesktopNativeCryptoFacade"
+import {DesktopDownloadManager} from "./net/DesktopDownloadManager.js"
+import {DesktopTray} from "./tray/DesktopTray"
+import {log} from "./DesktopLog"
+import {UpdaterWrapperImpl} from "./UpdaterWrapper"
+import {ElectronNotificationFactory} from "./NotificatonFactory"
+import {KeytarSecretStorage} from "./sse/SecretStorage"
 import fs from "fs"
-import { DesktopIntegrator, getDesktopIntegratorForPlatform } from "./integration/DesktopIntegrator"
+import {DesktopIntegrator, getDesktopIntegratorForPlatform} from "./integration/DesktopIntegrator"
 import net from "net"
 import child_process from "child_process"
-import { LocalShortcutManager } from "./electron-localshortcut/LocalShortcut"
-import { cryptoFns } from "./CryptoFns"
-import { DesktopConfigMigrator } from "./config/migrations/DesktopConfigMigrator"
-import type { DesktopKeyStoreFacade } from "./KeyStoreFacadeImpl"
-import { KeyStoreFacadeImpl } from "./KeyStoreFacadeImpl"
-import { AlarmSchedulerImpl } from "../calendar/date/AlarmScheduler"
-import { SchedulerImpl } from "../api/common/utils/Scheduler.js"
-import { DateProviderImpl } from "../calendar/date/CalendarUtils"
-import { DesktopThemeFacade } from "./DesktopThemeFacade"
-import { BuildConfigKey, DesktopConfigKey } from "./config/ConfigKeys"
-import { DesktopNativeCredentialsFacade } from "./credentials/DesktopNativeCredentialsFacade.js"
-import { webauthnIpcHandler, WebDialogController } from "./WebDialog.js"
+import {LocalShortcutManager} from "./electron-localshortcut/LocalShortcut"
+import {cryptoFns} from "./CryptoFns"
+import {DesktopConfigMigrator} from "./config/migrations/DesktopConfigMigrator"
+import type {DesktopKeyStoreFacade} from "./KeyStoreFacadeImpl"
+import {KeyStoreFacadeImpl} from "./KeyStoreFacadeImpl"
+import {AlarmSchedulerImpl} from "../calendar/date/AlarmScheduler"
+import {SchedulerImpl} from "../api/common/utils/Scheduler.js"
+import {DateProviderImpl} from "../calendar/date/CalendarUtils"
+import {DesktopThemeFacade} from "./DesktopThemeFacade"
+import {BuildConfigKey, DesktopConfigKey} from "./config/ConfigKeys"
+import {DesktopNativeCredentialsFacade} from "./credentials/DesktopNativeCredentialsFacade.js"
+import {webauthnIpcHandler, WebDialogController} from "./WebDialog.js"
 import path from "path"
-import { DesktopContextMenu } from "./DesktopContextMenu.js"
-import { DesktopNativePushFacade } from "./sse/DesktopNativePushFacade.js"
-import { NativeCredentialsFacade } from "../native/common/generatedipc/NativeCredentialsFacade.js"
-import { FacadeHandler, RemoteBridge } from "./ipc/RemoteBridge.js"
-import { DesktopSettingsFacade } from "./config/DesktopSettingsFacade.js"
-import { ApplicationWindow } from "./ApplicationWindow.js"
-import { DesktopCommonSystemFacade } from "./DesktopCommonSystemFacade.js"
-import { DesktopGlobalDispatcher } from "../native/common/generatedipc/DesktopGlobalDispatcher.js"
-import { DesktopDesktopSystemFacade } from "./DesktopDesktopSystemFacade.js"
-import { DesktopExportFacade } from "./DesktopExportFacade.js"
-import { DesktopFileFacade } from "./DesktopFileFacade.js"
-import { DesktopSearchTextInAppFacade } from "./DesktopSearchTextInAppFacade.js"
-import { exposeLocal } from "../api/common/WorkerProxy.js"
-import { ExposedNativeInterface } from "../native/common/NativeInterface.js"
-import { DesktopWebauthnFacade } from "./2fa/DesktopWebauthnFacade.js"
-import { DesktopPostLoginActions } from "./DesktopPostLoginActions.js"
-import { DesktopInterWindowEventFacade } from "./ipc/DesktopInterWindowEventFacade.js"
-import { OfflineDbFactory, OfflineDbManager, PerWindowSqlCipherFacade } from "./db/PerWindowSqlCipherFacade.js"
-import { SqlCipherFacade } from "../native/common/generatedipc/SqlCipherFacade.js"
-import { DesktopSqlCipher } from "./DesktopSqlCipher.js"
+import {DesktopContextMenu} from "./DesktopContextMenu.js"
+import {DesktopNativePushFacade} from "./sse/DesktopNativePushFacade.js"
+import {NativeCredentialsFacade} from "../native/common/generatedipc/NativeCredentialsFacade.js"
+import {FacadeHandler, RemoteBridge} from "./ipc/RemoteBridge.js"
+import {DesktopSettingsFacade} from "./config/DesktopSettingsFacade.js"
+import {ApplicationWindow} from "./ApplicationWindow.js"
+import {DesktopCommonSystemFacade} from "./DesktopCommonSystemFacade.js"
+import {DesktopGlobalDispatcher} from "../native/common/generatedipc/DesktopGlobalDispatcher.js"
+import {DesktopDesktopSystemFacade} from "./DesktopDesktopSystemFacade.js"
+import {DesktopExportFacade} from "./DesktopExportFacade.js"
+import {DesktopFileFacade} from "./DesktopFileFacade.js"
+import {DesktopSearchTextInAppFacade} from "./DesktopSearchTextInAppFacade.js"
+import {exposeLocal} from "../api/common/WorkerProxy.js"
+import {ExposedNativeInterface} from "../native/common/NativeInterface.js"
+import {DesktopWebauthnFacade} from "./2fa/DesktopWebauthnFacade.js"
+import {DesktopPostLoginActions} from "./DesktopPostLoginActions.js"
+import {DesktopInterWindowEventFacade} from "./ipc/DesktopInterWindowEventFacade.js"
+import {OfflineDbFactory, OfflineDbManager, PerWindowSqlCipherFacade} from "./db/PerWindowSqlCipherFacade.js"
+import {SqlCipherFacade} from "../native/common/generatedipc/SqlCipherFacade.js"
+import {DesktopSqlCipher} from "./DesktopSqlCipher.js"
+import {ImapAccount, ImapSyncState, MailboxState} from "./imapimport/adsync/ImapSyncState.js"
+import {ImapAdSync} from "./imapimport/adsync/ImapAdSync.js"
+import {ImapImporter} from "./imapimport/ImapImporter.js"
 
 /**
  * Should be injected during build time.
@@ -220,7 +223,7 @@ async function createComponents(): Promise<Components> {
 			themeFacade,
 			new DesktopWebauthnFacade(window, webDialogController),
 		)
-		return { desktopCommonSystemFacade, dispatcher }
+		return {desktopCommonSystemFacade, dispatcher}
 	}
 
 	const facadeHandlerFactory = (window: ApplicationWindow): FacadeHandler => {
@@ -258,7 +261,7 @@ async function createComponents(): Promise<Components> {
 }
 
 async function startupInstance(components: Components) {
-	const { dl, wm, sse } = components
+	const {dl, wm, sse} = components
 	if (!(await desktopUtils.makeSingleInstance())) return
 	// Delete the temp directory on startup because we may not always be able to do it on shutdown.
 	//
@@ -281,23 +284,23 @@ async function startupInstance(components: Components) {
 			await handleMailto(findMailToUrlInArgv(args), components)
 		}
 	})
-		.on("open-url", (e, url) => {
-			// MacOS mailto handling
-			e.preventDefault()
+	   .on("open-url", (e, url) => {
+		   // MacOS mailto handling
+		   e.preventDefault()
 
-			if (url.startsWith("mailto:")) {
-				app.whenReady().then(() => handleMailto(url, components))
-			}
-		})
-		.on("will-quit", (e) => {
-			dl.deleteTutanotaTempDirectory()
-		})
+		   if (url.startsWith("mailto:")) {
+			   app.whenReady().then(() => handleMailto(url, components))
+		   }
+	   })
+	   .on("will-quit", (e) => {
+		   dl.deleteTutanotaTempDirectory()
+	   })
 	await app.whenReady()
 	await onAppReady(components)
 }
 
 async function onAppReady(components: Components) {
-	const { wm, keyStoreFacade, conf } = components
+	const {wm, keyStoreFacade, conf} = components
 	keyStoreFacade.getDeviceKey().catch(() => {
 		electron.dialog.showErrorBox("Could not access secret storage", "Please see the FAQ at tutanota.com/faq/#secretstorage")
 	})
@@ -315,7 +318,7 @@ async function onAppReady(components: Components) {
 }
 
 async function main(components: Components) {
-	const { tray, notifier, sock, wm, updater, integrator } = components
+	const {tray, notifier, sock, wm, updater, integrator} = components
 	tray.update(notifier)
 
 	if (process.argv.indexOf("-s") !== -1) {
@@ -334,6 +337,14 @@ async function main(components: Components) {
 	updater.start()
 	integrator.runIntegration(wm)
 
+	// TODO remove
+	let imapAccount = new ImapAccount("192.168.178.83", 993, "johannes").setPassword("Wsw6r6dzEH7Y9mDJ")
+	let mailboxStates = [new MailboxState("\\Drafts", 0, 0, 0, new Map<number, IdTuple>())]
+	let imapSyncState = new ImapSyncState(imapAccount, 2500, mailboxStates)
+	let imapAdSync = new ImapAdSync(imapSyncState)
+	let imapImporter = new ImapImporter(imapAdSync)
+	await imapImporter.continueImport()
+
 	if (opts.mailTo) {
 		await handleMailto(opts.mailTo, components)
 	}
@@ -343,7 +354,7 @@ function findMailToUrlInArgv(argv: string[]): string | null {
 	return argv.find((arg) => arg.startsWith("mailto")) ?? null
 }
 
-async function handleMailto(mailtoArg: string | null, { wm }: Components) {
+async function handleMailto(mailtoArg: string | null, {wm}: Components) {
 	if (mailtoArg) {
 		/*[filesUris, text, addresses, subject, mailToUrl]*/
 		const w = await wm.getLastFocused(true)
