@@ -56,7 +56,7 @@ import { DesktopPostLoginActions } from "./DesktopPostLoginActions.js"
 import { DesktopInterWindowEventFacade } from "./ipc/DesktopInterWindowEventFacade.js"
 import { OfflineDbFactory, OfflineDbManager, PerWindowSqlCipherFacade } from "./db/PerWindowSqlCipherFacade.js"
 import { SqlCipherFacade } from "../native/common/generatedipc/SqlCipherFacade.js"
-import { DesktopSqlCipher } from "./DesktopSqlCipher.js"
+import { WorkerSqlCipher } from "./db/WorkerSqlCipher.js"
 import { lazyMemoized } from "@tutao/tutanota-utils"
 
 /**
@@ -154,7 +154,7 @@ async function createComponents(): Promise<Components> {
 
 	const offlineDbFactory: OfflineDbFactory = {
 		async create(userId: string, key: Uint8Array, retry: boolean = true): Promise<SqlCipherFacade> {
-			const db = new DesktopSqlCipher(buildOptions.sqliteNativePath, makeDbPath(userId), true)
+			const db = new WorkerSqlCipher(buildOptions.sqliteNativePath, makeDbPath(userId), true)
 			try {
 				await db.openDb(userId, key)
 			} catch (e) {

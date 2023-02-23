@@ -27,19 +27,15 @@ export interface Transport<OutgoingCommandType, IncomingCommandType> {
 /**
  * Queue transport for both WorkerClient and WorkerImpl
  */
-export class WorkerTransport<OutgoingCommandType, IncomingCommandType> implements Transport<OutgoingCommandType, IncomingCommandType> {
-	_worker: Worker | DedicatedWorkerGlobalScope
-
-	constructor(worker: Worker | DedicatedWorkerGlobalScope) {
-		this._worker = worker
-	}
+export class WebWorkerTransport<OutgoingCommandType, IncomingCommandType> implements Transport<OutgoingCommandType, IncomingCommandType> {
+	constructor(private readonly worker: Worker | DedicatedWorkerGlobalScope) {}
 
 	postMessage(message: Message<OutgoingCommandType>): void {
-		return this._worker.postMessage(message)
+		return downcast(this.worker).postMessage(message)
 	}
 
 	setMessageHandler(handler: (message: Message<IncomingCommandType>) => unknown) {
-		this._worker.onmessage = (ev: MessageEvent) => handler(downcast(ev.data))
+		this.worker.onmessage = (ev: MessageEvent) => handler(downcast(ev.data))
 	}
 }
 
