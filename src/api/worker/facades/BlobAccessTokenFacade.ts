@@ -19,6 +19,11 @@ import { SomeEntity } from "../../common/EntityTypes.js"
 
 assertWorkerOrNode()
 
+/**
+ * Common interface for instances that are referencing blobs. Main purpose is to have a proper way to access the attribute for the Blob aggregated type
+ * because the name of the attribute can be different for each instance.
+ *
+ */
 export interface BlobReferencingInstance {
 	getElementId(): Id
 
