@@ -1,9 +1,11 @@
 import {SyncSessionMailbox} from "./SyncSessionMailbox.js"
 import {AdSyncEventListener} from "./AdSyncEventListener.js"
-import {ImapFlow, Readable} from 'imapflow';
 import {ImapAccount} from "./ImapSyncState.js"
 import {SyncSessionEventListener} from "./ImapSyncSession.js"
 import {ImapMail, ImapMailAttachement, ImapMailEnvelope} from "./ImapMail.js"
+
+const {ImapFlow} = require('imapflow');
+const mailparser = require('mailparser');
 
 export enum SyncSessionProcessState {
 	STOPPED,
@@ -49,70 +51,50 @@ export class ImapSyncSessionProcess {
 		return this.state
 	}
 
-	private async runSyncSessionProcess(imapClient: ImapFlow, adSyncEventListener: AdSyncEventListener) {
+	private async runSyncSessionProcess(imapClient: typeof ImapFlow, adSyncEventListener: AdSyncEventListener) {
 		let lock = await imapClient.getMailboxLock(this.syncSessionMailbox.mailboxState.path, {readonly: true})
 		try {
-			let lastUid = Math.max(...this.syncSessionMailbox.mailboxState.importedUidToMailMap.keys())
+			let lastUid = Math.max(...this.syncSessionMailbox.mailboxState.importedUidToMailMap.keys(), 1)
 
-			let fetchQuery = imapClient.fetch(
+			// TODO Use downloadBlockSize to fetch in stages
+			let mailFetchStartTime = Date.now()
+			let mails = imapClient.fetch(
 				`${lastUid}:*`,
 				{
 					uid: true,
-					size: true,
-					internalDate: true,
-					flags: true,
+					source: true,
 					labels: true,
+					size: true,
+					flags: true,
+					internalDate: true,
 					envelope: true,
-					bodyStructure: true,
 					headers: true,
 				},
 				{
 					uid: true,
-					// @ts-ignore // TODO type definitions
-					changedSince: this.syncSessionMailbox.mailboxState.highestModSeq
+					// changedSince: this.syncSessionMailbox.mailboxState.highestModSeq
 				},
 			)
 
-			let mailFetchStartTime = Date.now()
-			for await (let mail of fetchQuery) {
-
-				let attachmentBodyParts = mail.bodyStructure.childNodes
-				let attachmentBodyPartNumbers = attachmentBodyParts.map(bodyStructure => bodyStructure.part)
-
-				let bodyTextDownloadObject = await imapClient.download(
-					`${mail.uid}`,
-					mail.bodyStructure.part,
-					{
-						uid: true,
-					}
-				)
-
-				// @ts-ignore // TODO type definitions
-				let attachmentDownloadObjects = await imapClient.downloadMany(
-					`${mail.uid}`,
-					attachmentBodyPartNumbers,
-					{
-						uid: true,
-					}
-				)
-
+			for await (const mail of mails) {
+				//TODO check this.state
 				let mailFetchEndTime = Date.now()
 				let mailFetchTime = mailFetchEndTime - mailFetchStartTime
 
-				this.syncSessionMailbox.currentThroughput = mail.size / mailFetchTime // TODO What type / unit has mail.size?
+				this.syncSessionMailbox.currentThroughput = mail.size / mailFetchTime
 				this.syncSessionEventListener.onEfficiencyScoreMeasured(this.processId, this.syncSessionMailbox.normalizedEfficiencyScore, mail.size)
 
-				let bodyText = (await this.readableToBuffer(bodyTextDownloadObject.content)).toString()
+				let parsedMail = await mailparser.simpleParser(mail.source)
 
 				let attachments: ImapMailAttachement[] = []
-				for (const attachmentDownloadObject of attachmentDownloadObjects) {
-					let meta = attachmentDownloadObject.meta
-					let binary = await this.readableToBuffer(attachmentDownloadObject.content)
-					let attachment = new ImapMailAttachement(meta.expectedSize, meta.contentType, binary)
+				for (const parsedAttachment of parsedMail.attachments) {
+					let binary = parsedAttachment.content
+					let attachment = new ImapMailAttachement(parsedAttachment.size, parsedAttachment.contentType, binary)
 					attachments.push(attachment)
 				}
 
 				// TODO use emailId when uid is not reliable
+				// TODO we should optimize the download by not downloading envelope and headers twice!
 				let imapMail = new ImapMail(mail.uid)
 					.setModSeq(mail.modseq)
 					.setSize(mail.size)
@@ -120,7 +102,7 @@ export class ImapSyncSessionProcess {
 					.setFlags(mail.flags)
 					.setLabels(mail.labels)
 					.setEnvelope(ImapMailEnvelope.fromMessageEnvelopeObject(mail.envelope))
-					.setBodyText(bodyText)
+					.setBodyText(parsedMail.textAsHtml)
 					.setAttachments(attachments)
 					.setHeaders(mail.headers)
 
@@ -130,11 +112,10 @@ export class ImapSyncSessionProcess {
 				} else {
 					adSyncEventListener.onMail(imapMail)
 				}
-
-				mailFetchStartTime = Date.now()
 			}
 		} finally {
 			lock.release()
+			await imapClient.logout()
 			this.syncSessionEventListener.onFinish(this.processId, this.syncSessionMailbox)
 		}
 	}
@@ -143,16 +124,4 @@ export class ImapSyncSessionProcess {
 		this.state = SyncSessionProcessState.STOPPED
 		return this.syncSessionMailbox
 	}
-
-	// TODO Move to Utils?
-	private readableToBuffer(readable: Readable): Promise<Buffer> {
-		const chunks: Buffer[] = []
-		return new Promise((resolve, reject) => {
-			readable.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
-			readable.on('error', (err) => reject(err));
-			readable.on('end', () => resolve(Buffer.concat(chunks)));
-		})
-	}
-
-
 }

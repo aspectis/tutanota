@@ -84,16 +84,35 @@ export class ImapMailEnvelope {
 	}
 
 	static fromMessageEnvelopeObject(messageEnvelopeObject: MessageEnvelopeObject) {
-		return new ImapMailEnvelope()
+		let imapMailEnvelope = new ImapMailEnvelope()
 			.setDate(messageEnvelopeObject.date)
 			.setSubject(messageEnvelopeObject.subject)
 			.setMessageId(messageEnvelopeObject.messageId)
 			.setInReplyTo(messageEnvelopeObject.inReplyTo)
-			.setSender(messageEnvelopeObject.sender.map(sender => ImapMailAddress.fromMessageAddressObject(sender)))
-			.setTo(messageEnvelopeObject.to.map(to => ImapMailAddress.fromMessageAddressObject(to)))
-			.setCc(messageEnvelopeObject.cc.map(cc => ImapMailAddress.fromMessageAddressObject(cc)))
-			.setBcc(messageEnvelopeObject.bcc.map(bcc => ImapMailAddress.fromMessageAddressObject(bcc)))
-			.setReplyTo(messageEnvelopeObject.replyTo.map(replyTo => ImapMailAddress.fromMessageAddressObject(replyTo)))
+
+		if (messageEnvelopeObject.sender) {
+			imapMailEnvelope.setSender(messageEnvelopeObject.sender.map(sender => ImapMailAddress.fromMessageAddressObject(sender)))
+		}
+
+		if (messageEnvelopeObject.to) {
+			imapMailEnvelope.setTo(messageEnvelopeObject.to.map(to => ImapMailAddress.fromMessageAddressObject(to)))
+
+		}
+
+		if (messageEnvelopeObject.cc) {
+			imapMailEnvelope.setCc(messageEnvelopeObject.cc.map(cc => ImapMailAddress.fromMessageAddressObject(cc)))
+		}
+
+		if (messageEnvelopeObject.bcc) {
+			imapMailEnvelope.setBcc(messageEnvelopeObject.bcc.map(bcc => ImapMailAddress.fromMessageAddressObject(bcc)))
+
+		}
+
+		if (messageEnvelopeObject.replyTo) {
+			imapMailEnvelope.setReplyTo(messageEnvelopeObject.replyTo.map(replyTo => ImapMailAddress.fromMessageAddressObject(replyTo)))
+		}
+
+		return imapMailEnvelope
 	}
 }
 

@@ -41,7 +41,6 @@ export class ImapSyncSession implements SyncSessionEventListener {
 
 	async stopSyncSession(): Promise<SyncSessionState> {
 		this.state = SyncSessionState.PAUSED
-		// TODO stop things here
 		return this.state
 	}
 
@@ -55,18 +54,16 @@ export class ImapSyncSession implements SyncSessionEventListener {
 			this.mailboxes[0],
 		)
 
+		process1.startSyncSessionProcess(adSyncEventListener)
+
 		// TODO fetch mailbox list
 		// TODO load initial information
 		// TODO set up everything
 		// TODO start sync
 		// TODO trigger events
-
-
 	}
 
 	private async setupSyncSession(adSyncEventListener: AdSyncEventListener) {
-
-
 		this.mailboxes.map(mailBox => {
 			//mailBox.initSessionMailbox()
 		})
