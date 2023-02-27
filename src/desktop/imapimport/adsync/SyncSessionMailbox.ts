@@ -19,7 +19,6 @@ export enum SyncSessionMailboxImportance {
 }
 
 export class SyncSessionMailbox {
-
 	mailboxState: MailboxState
 	private _specialUse: string = ""
 	private size: number = 0
@@ -32,7 +31,7 @@ export class SyncSessionMailbox {
 	private efficiencyScoreTTLIntervalSum: number = 0
 	private _efficiencyScoreTTLIntervalHistory: number[] = []
 	private lastEfficiencyScoreUpdate: number = Date.now()
-	private _downloadBlockSize: number = 1
+	private _downloadBlockSize: number = 20
 	private downloadBlockSizeTTLIntervalSum: number = 0
 	private _downloadBlockSizeTTLIntervalHistory: number[] = []
 	private lastDownloadBlockSizeUpdate: number = Date.now()
@@ -100,8 +99,21 @@ export class SyncSessionMailbox {
 	}
 
 	get normalizedEfficiencyScore(): number {
-		let start = this.efficiencyScoreTTLIntervalHistory.length >= NORMALIZATION_COEFFICIENT ? NORMALIZATION_COEFFICIENT : this.efficiencyScoreTTLIntervalHistory.length
-		return this.efficiencyScoreTTLIntervalHistory.slice(-start).reduce((acc, value) => acc += value) / NORMALIZATION_COEFFICIENT
+		if (this.efficiencyScoreTTLIntervalHistory.length == 0) {
+			return this.efficiencyScore
+		} else {
+			let start = this.efficiencyScoreTTLIntervalHistory.length >= NORMALIZATION_COEFFICIENT ? NORMALIZATION_COEFFICIENT : this.efficiencyScoreTTLIntervalHistory.length
+			return this.efficiencyScoreTTLIntervalHistory.slice(-start).reduce((acc, value) => acc += value) / NORMALIZATION_COEFFICIENT
+		}
+	}
+
+	get normalizedDownloadBlockSize(): number {
+		if (this.downloadBlockSizeTTLIntervalHistory.length == 0) {
+			return this._downloadBlockSize
+		} else {
+			let start = this.downloadBlockSizeTTLIntervalHistory.length >= NORMALIZATION_COEFFICIENT ? NORMALIZATION_COEFFICIENT : this.downloadBlockSizeTTLIntervalHistory.length
+			return this.downloadBlockSizeTTLIntervalHistory.slice(-start).reduce((acc, value) => acc += value) / NORMALIZATION_COEFFICIENT
+		}
 	}
 
 	set downloadBlockSize(value: number) {

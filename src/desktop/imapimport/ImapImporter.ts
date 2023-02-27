@@ -1,9 +1,9 @@
 import {ImapAdSync} from "./adsync/ImapAdSync.js";
 import {ImapImportState, ImportState} from "./ImapImportState.js";
 import {AdSyncEventListener} from "./adsync/AdSyncEventListener.js"
-import {ImapMailbox} from "./adsync/ImapMailbox.js"
-import {ImapMail} from "./adsync/ImapMail.js"
-import {ImapError} from "./adsync/ImapError.js"
+import {ImapMailbox} from "./adsync/imapmail/ImapMailbox.js"
+import {ImapMail} from "./adsync/imapmail/ImapMail.js"
+import {ImapError} from "./adsync/imapmail/ImapError.js"
 import {SyncSessionState} from "./adsync/ImapSyncSession.js"
 
 export class ImapImporter implements AdSyncEventListener {
