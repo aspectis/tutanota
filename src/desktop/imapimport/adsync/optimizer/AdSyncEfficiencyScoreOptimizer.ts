@@ -13,6 +13,7 @@ export interface AdSyncEfficiencyScoreOptimizerEventListener {
 
 export class AdSyncEfficiencyScoreOptimizer extends AdSyncOptimizer implements AdSyncEfficiencyScoreOptimizerEventListener {
 
+	protected scheduler: NodeJS.Timer
 	private readonly imapAccount: ImapAccount
 	private readonly mailboxes: SyncSessionMailbox[]
 	private adSyncEventListener: AdSyncEventListener
@@ -28,6 +29,7 @@ export class AdSyncEfficiencyScoreOptimizer extends AdSyncOptimizer implements A
 		this.imapAccount = imapAccount
 		this.mailboxes = mailboxes
 		this.adSyncEventListener = adSyncEventListener
+		this.scheduler = setInterval(this.optimize, 30 * 1000) // every 30 seconds
 	}
 
 	protected optimize(): void {
@@ -55,6 +57,7 @@ export class AdSyncEfficiencyScoreOptimizer extends AdSyncOptimizer implements A
 	}
 
 	stopAdSyncOptimizer(): void {
+		//TODO
 	}
 
 	onEfficiencyScoreMeasured(processId: number, efficiencyScore: number, downloadedQuota: number): void {

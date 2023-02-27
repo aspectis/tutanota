@@ -24,7 +24,7 @@ export class SyncSessionMailbox {
 	private size: number = 0
 	private mailCount: number = 0
 	private _averageMailSize: number = 0
-	private timeToLiveInterval: number = 0
+	timeToLiveInterval: number = 0
 	private importance: SyncSessionMailboxImportance = SyncSessionMailboxImportance.MEDIUM
 	private _currentThroughput: number = 0.000001
 	private _efficiencyScore: number = 1
