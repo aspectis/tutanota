@@ -24,14 +24,14 @@ export class SyncSessionMailbox {
 	private size: number = 0
 	private mailCount: number = 0
 	private _averageMailSize: number = 0
-	timeToLiveInterval: number = 0
+	timeToLiveInterval: number = 60
 	private importance: SyncSessionMailboxImportance = SyncSessionMailboxImportance.MEDIUM
 	private _currentThroughput: number = 0.000001
 	private _efficiencyScore: number = 1
 	private efficiencyScoreTTLIntervalSum: number = 0
 	private _efficiencyScoreTTLIntervalHistory: number[] = []
 	private lastEfficiencyScoreUpdate: number = Date.now()
-	private _downloadBlockSize: number = 20
+	private _downloadBlockSize: number = 200
 	private downloadBlockSizeTTLIntervalSum: number = 0
 	private _downloadBlockSizeTTLIntervalHistory: number[] = []
 	private lastDownloadBlockSizeUpdate: number = Date.now()
@@ -82,7 +82,8 @@ export class SyncSessionMailbox {
 		this._currentThroughput = value
 
 		if (this.lastEfficiencyScoreUpdate + this.timeToLiveInterval <= Date.now()) {
-			let averageEfficiencyScoreTTLInterval = this.efficiencyScoreTTLIntervalSum / this.timeToLiveInterval
+			this.lastEfficiencyScoreUpdate = Date.now()
+			let averageEfficiencyScoreTTLInterval = this.efficiencyScoreTTLIntervalSum / this.timeToLiveInterval // TODO is this correct?
 			this._efficiencyScoreTTLIntervalHistory.push(averageEfficiencyScoreTTLInterval)
 			this.efficiencyScoreTTLIntervalSum = 0
 		} else {
@@ -103,7 +104,11 @@ export class SyncSessionMailbox {
 			return this.efficiencyScore
 		} else {
 			let start = this.efficiencyScoreTTLIntervalHistory.length >= NORMALIZATION_COEFFICIENT ? NORMALIZATION_COEFFICIENT : this.efficiencyScoreTTLIntervalHistory.length
-			return this.efficiencyScoreTTLIntervalHistory.slice(-start).reduce((acc, value) => acc += value) / NORMALIZATION_COEFFICIENT
+			return (this.efficiencyScoreTTLIntervalHistory.slice(-start).reduce((acc, value) => {
+				acc += value
+				return acc
+			}) / NORMALIZATION_COEFFICIENT)
+
 		}
 	}
 
@@ -112,7 +117,10 @@ export class SyncSessionMailbox {
 			return this._downloadBlockSize
 		} else {
 			let start = this.downloadBlockSizeTTLIntervalHistory.length >= NORMALIZATION_COEFFICIENT ? NORMALIZATION_COEFFICIENT : this.downloadBlockSizeTTLIntervalHistory.length
-			return this.downloadBlockSizeTTLIntervalHistory.slice(-start).reduce((acc, value) => acc += value) / NORMALIZATION_COEFFICIENT
+			return (this.downloadBlockSizeTTLIntervalHistory.slice(-start).reduce((acc, value) => {
+				acc += value
+				return acc
+			}) / NORMALIZATION_COEFFICIENT)
 		}
 	}
 

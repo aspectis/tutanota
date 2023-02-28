@@ -91,7 +91,6 @@ export class ImapMailEnvelope {
 	static fromMailParserHeadersMap(mailParserHeadersMap: Map<string, object | string | Date>) {
 		let imapMailEnvelope = new ImapMailEnvelope()
 
-
 		if (mailParserHeadersMap.has('date')) {
 			imapMailEnvelope.setDate(<Date>mailParserHeadersMap.get('date'))
 		}
@@ -109,23 +108,28 @@ export class ImapMailEnvelope {
 		}
 
 		if (mailParserHeadersMap.has('sender')) {
-			imapMailEnvelope.setSender((<object[]>mailParserHeadersMap.get('sender')).map(sender => ImapMailAddress.fromMailParserAddressObject(sender)))
+			// @ts-ignore
+			imapMailEnvelope.setSender((<object>mailParserHeadersMap.get('sender')).value.map(sender => ImapMailAddress.fromMailParserAddressObject(sender)))
 		}
 
 		if (mailParserHeadersMap.has('to')) {
-			imapMailEnvelope.setTo((<object[]>mailParserHeadersMap.get('to')).map(to => ImapMailAddress.fromMailParserAddressObject(to)))
+			// @ts-ignore
+			imapMailEnvelope.setTo((<object>mailParserHeadersMap.get('to')).value.map(to => ImapMailAddress.fromMailParserAddressObject(to)))
 		}
 
 		if (mailParserHeadersMap.has('cc')) {
-			imapMailEnvelope.setCc((<object[]>mailParserHeadersMap.get('cc')).map(cc => ImapMailAddress.fromMailParserAddressObject(cc)))
+			// @ts-ignore
+			imapMailEnvelope.setCc((<object>mailParserHeadersMap.get('cc')).value.map(cc => ImapMailAddress.fromMailParserAddressObject(cc)))
 		}
 
 		if (mailParserHeadersMap.has('bcc')) {
-			imapMailEnvelope.setBcc((<object[]>mailParserHeadersMap.get('bcc')).map(bcc => ImapMailAddress.fromMailParserAddressObject(bcc)))
+			// @ts-ignore
+			imapMailEnvelope.setBcc((<object>mailParserHeadersMap.get('bcc')).value.map(bcc => ImapMailAddress.fromMailParserAddressObject(bcc)))
 		}
 
 		if (mailParserHeadersMap.has('reply-to')) {
-			imapMailEnvelope.setReplyTo((<object[]>mailParserHeadersMap.get('reply-to')).map(replyTo => ImapMailAddress.fromMailParserAddressObject(replyTo)))
+			// @ts-ignore
+			imapMailEnvelope.setReplyTo((<object>mailParserHeadersMap.get('reply-to')).value.map(replyTo => ImapMailAddress.fromMailParserAddressObject(replyTo)))
 		}
 
 		return imapMailEnvelope
@@ -220,7 +224,8 @@ export class ImapMail {
 	}
 
 	static async fromImapFlowFetchMessageObject(mail: FetchMessageObject) {
-		let parsedMailRFC822 = await new ImapMailRFC822Parser(mail.source)
+		let imapMailRFC822Parser = new ImapMailRFC822Parser()
+		let parsedMailRFC822 = await imapMailRFC822Parser.parseSource(mail.source)
 
 		// TODO use emailId when uid is not reliable
 		let imapMail = new ImapMail(mail.uid)

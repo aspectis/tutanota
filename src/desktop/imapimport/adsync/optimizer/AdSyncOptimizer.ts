@@ -9,5 +9,7 @@ export abstract class AdSyncOptimizer {
 
 	protected abstract optimize(): void
 
-	abstract stopAdSyncOptimizer(): void
+	stopAdSyncOptimizer(): void {
+		clearInterval(this.scheduler)
+	}
 }

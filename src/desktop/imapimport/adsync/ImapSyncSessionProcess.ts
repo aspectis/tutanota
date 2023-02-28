@@ -16,34 +16,32 @@ export enum SyncSessionProcessState {
 }
 
 class FetchUidRange {
-	fromUid: number
-	toUid: number
-	private fromSeq: number
-	private toSeq: number
+	fromUid?: number
+	toUid?: number
+	private fromSeq: number = 1
+	private toSeq?: number
 	private imapClient: typeof ImapFlow
 
-	constructor(imapClient: typeof ImapFlow, initialFromUid: number, initialDownloadBlockSize: number) {
+	constructor(imapClient: typeof ImapFlow) {
 		this.imapClient = imapClient
-
-		this.fromUid = initialFromUid
-		let fetchFromSeqMail: FetchMessageObject = this.imapClient.fetch(`${this.fromUid}`, {uid: true}, {uid: true})
-		this.fromSeq = fetchFromSeqMail.seq
-
-		let fetchToSeq = fetchFromSeqMail.seq + initialDownloadBlockSize
-
-		let fetchToSeqMail: FetchMessageObject = this.imapClient.fetch(`${fetchToSeq}`, {uid: true})
-		this.toSeq = fetchToSeqMail.seq
-		this.toUid = fetchToSeqMail.uid
 	}
 
-	updateFetchUidRange(downloadBlockSize: number) {
-		let fetchFromSeqMail: FetchMessageObject = this.imapClient.fetch(`${this.toSeq + 1}`, {uid: true})
+	async initFetchUidRange(initialFrom: number, initialDownloadBlockSize: number, isUid: boolean) {
+		await this.updateFetchUidRange(initialFrom, initialDownloadBlockSize, isUid)
+	}
+
+	async continueFetchUidRange(downloadBlockSize: number) {
+		await this.updateFetchUidRange(this.toSeq ? this.toSeq + 1 : 1, downloadBlockSize, false)
+	}
+
+	private async updateFetchUidRange(from: number, downloadBlockSize: number, isUid: boolean) {
+		let fetchFromSeqMail = await this.imapClient.fetchOne(`${from}`, {seq: true, uid: true}, {uid: isUid})
 		this.fromSeq = fetchFromSeqMail.seq
 		this.fromUid = fetchFromSeqMail.uid
 
-		let fetchToSeq = this.fromSeq + downloadBlockSize
+		let fetchToSeq = fetchFromSeqMail.seq + downloadBlockSize
 
-		let fetchToSeqMail: FetchMessageObject = this.imapClient.fetch(`${fetchToSeq}`, {uid: true})
+		let fetchToSeqMail: FetchMessageObject = await this.imapClient.fetchOne(`${fetchToSeq}`, {seq: true, uid: true})
 		this.toSeq = fetchToSeqMail.seq
 		this.toUid = fetchToSeqMail.uid
 	}
@@ -68,13 +66,17 @@ export class ImapSyncSessionProcess {
 			host: this.imapAccount.host,
 			port: this.imapAccount.port,
 			secure: true,
+			tls: {
+				rejectUnauthorized: false, // TODO deactivate after testing
+			},
+			logger: false,
 			auth: {
 				user: this.imapAccount.username,
 				pass: this.imapAccount.password,
 				accessToken: this.imapAccount.accessToken
 			},
 			// @ts-ignore
-			qresync: true, // TODO type definitions
+			// qresync: true, // TODO type definitions
 		})
 
 		try {
@@ -96,10 +98,12 @@ export class ImapSyncSessionProcess {
 		}
 
 		try {
-			let lastFetchedUid = Math.max(...this.adSyncOptimizer.optimizedSyncSessionMailbox.mailboxState.importedUidToMailMap.keys(), 1)
-			let fetchUidRange = new FetchUidRange(imapClient, lastFetchedUid, this.adSyncOptimizer.optimizedSyncSessionMailbox.normalizedDownloadBlockSize)
+			let fetchUidRange = new FetchUidRange(imapClient)
+			let lastFetchedUid = Math.max(...this.adSyncOptimizer.optimizedSyncSessionMailbox.mailboxState.importedUidToMailMap.keys())
+			let isInitialSeqFetch = !isNaN(lastFetchedUid)
+			await fetchUidRange.initFetchUidRange(isInitialSeqFetch ? 1 : lastFetchedUid, this.adSyncOptimizer.optimizedSyncSessionMailbox.normalizedDownloadBlockSize, !isInitialSeqFetch)
 
-			while (fetchUidRange.toUid < this.adSyncOptimizer.optimizedSyncSessionMailbox.mailboxState.uidNext) {
+			while (fetchUidRange.toUid && fetchUidRange.toUid < this.adSyncOptimizer.optimizedSyncSessionMailbox.mailboxState.uidNext) {
 				let mailFetchStartTime = Date.now()
 				let mails = imapClient.fetch(
 					`${fetchUidRange.fromUid}:${fetchUidRange.toUid}`,
@@ -140,16 +144,17 @@ export class ImapSyncSessionProcess {
 					}
 				}
 
-				fetchUidRange.updateFetchUidRange(this.adSyncOptimizer.optimizedSyncSessionMailbox.normalizedDownloadBlockSize)
+				await fetchUidRange.continueFetchUidRange(this.adSyncOptimizer.optimizedSyncSessionMailbox.normalizedDownloadBlockSize)
 			}
 		} finally {
 			await releaseLockAndLogout()
-			this.adSyncEfficiencyScoreOptimizerEventListener.onFinish(this.processId, this.adSyncOptimizer.optimizedSyncSessionMailbox)
+			this.adSyncEfficiencyScoreOptimizerEventListener.onMailboxFinish(this.processId, this.adSyncOptimizer.optimizedSyncSessionMailbox)
 		}
 	}
 
 	async stopSyncSessionProcess(): Promise<SyncSessionMailbox> {
 		this.state = SyncSessionProcessState.STOPPED
+		this.adSyncOptimizer.stopAdSyncOptimizer()
 		return this.adSyncOptimizer.optimizedSyncSessionMailbox
 	}
 }

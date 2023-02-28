@@ -3,34 +3,49 @@ import * as Stream from "stream"
 
 const MailParser = require('mailparser').MailParser;
 
-export class ImapMailRFC822Parser {
+export interface ParsedImapRFC822 {
 	parsedEnvelope?: ImapMailEnvelope
 	parsedBodyText?: string
-	parsedAttachments?: ImapMailAttachment[] = []
+	parsedAttachments?: ImapMailAttachment[]
+}
 
-	constructor(source: Buffer) {
-		let parser = new MailParser()
+export class ImapMailRFC822Parser {
+	private parser: typeof MailParser
 
-		parser.on('headers', (headersMap: Map<string, object>) => {
-			this.parsedEnvelope = ImapMailEnvelope.fromMailParserHeadersMap(headersMap)
+	constructor() {
+		this.parser = new MailParser()
+	}
+
+	async parseSource(source: Buffer): Promise<ParsedImapRFC822> {
+		return new Promise<ParsedImapRFC822>((resolve, reject) => {
+			let parsedImapRFC822: ParsedImapRFC822 = {}
+
+			this.parser.on('headers', (headersMap: Map<string, object>) => {
+				parsedImapRFC822.parsedEnvelope = ImapMailEnvelope.fromMailParserHeadersMap(headersMap)
+			})
+
+			this.parser.on('data', async (data: any) => {
+				if (data.type === 'text') {
+					parsedImapRFC822.parsedBodyText = data.textAsHtml
+				}
+
+				if (data.type == 'attachment') {
+					let binary = await this.bufferFromStream(data.content)
+					let imapMailAttachment = new ImapMailAttachment(data.size, data.contentType, binary)
+					parsedImapRFC822.parsedAttachments?.push(imapMailAttachment)
+
+					data.content.on('end', () => data.release())
+				}
+			})
+
+			this.parser.on('error', (err: Error) => reject(err))
+
+			this.parser.on("end", () => {
+				resolve(parsedImapRFC822)
+			})
+
+			this.parser.end(source)
 		})
-
-		parser.on('data', async (data: any) => {
-			if (data.type === 'text') {
-				this.parsedBodyText = data.textAsHtml
-			}
-
-			if (data.type == 'attachment') {
-				let binary = await this.bufferFromStream(data.content)
-				let imapMailAttachment = new ImapMailAttachment(data.size, data.contentType, binary)
-				this.parsedAttachments?.push(imapMailAttachment)
-
-				data.content.on('end', () => data.release())
-			}
-		})
-
-		parser.end(source)
-
 	}
 
 	private bufferFromStream(stream: Stream): Promise<Buffer> {

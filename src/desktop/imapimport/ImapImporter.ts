@@ -11,6 +11,8 @@ export class ImapImporter implements AdSyncEventListener {
 	private imapAdSync: ImapAdSync | null = null
 	private imapImportState: ImapImportState = new ImapImportState(ImportState.PAUSED, new Date(Date.now()))
 
+	private testCounter = 0
+
 	constructor(
 		//private readonly importMailFacade: ImportMailFacade,
 		//private readonly importImapFacade: ImportImapFacade,
@@ -47,8 +49,9 @@ export class ImapImporter implements AdSyncEventListener {
 	}
 
 	onMail(mail: ImapMail): void {
-		console.log("Nice!")
+		this.testCounter += 1
 		console.log(mail)
+		console.log(this.testCounter)
 	}
 
 	onPostpone(postponedUntil: Date): void {

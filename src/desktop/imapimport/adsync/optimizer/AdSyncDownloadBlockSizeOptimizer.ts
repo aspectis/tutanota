@@ -9,7 +9,7 @@ export class AdSyncDownloadBlockSizeOptimizer extends AdSyncOptimizer {
 	constructor(syncSessionMailbox: SyncSessionMailbox, optimizationDifference: number) {
 		super(optimizationDifference)
 		this._optimizedSyncSessionMailbox = syncSessionMailbox
-		this.scheduler = setInterval(this.optimize, this.optimizedSyncSessionMailbox.timeToLiveInterval * 1000) // every timeToLiveInterval in seconds
+		this.scheduler = setInterval(this.optimize.bind(this), this.optimizedSyncSessionMailbox.timeToLiveInterval * 1000) // every timeToLiveInterval in seconds
 	}
 
 	get optimizedSyncSessionMailbox(): SyncSessionMailbox {
@@ -20,16 +20,12 @@ export class AdSyncDownloadBlockSizeOptimizer extends AdSyncOptimizer {
 		let normalizedEfficiencyScore = this.optimizedSyncSessionMailbox.normalizedEfficiencyScore
 		let normalizedDownloadBlockSize = this.optimizedSyncSessionMailbox.normalizedDownloadBlockSize
 
-		if (normalizedEfficiencyScore > this.lastNormalizedEfficiencyScore) {
+		if (normalizedEfficiencyScore >= this.lastNormalizedEfficiencyScore) {
 			this.optimizedSyncSessionMailbox.downloadBlockSize = normalizedDownloadBlockSize + this.optimizationDifference
 		} else {
 			this._optimizedSyncSessionMailbox.downloadBlockSize = normalizedDownloadBlockSize - this.optimizationDifference
 		}
 
 		this.lastNormalizedEfficiencyScore = normalizedEfficiencyScore
-	}
-
-	stopAdSyncOptimizer(): void {
-		// TODO
 	}
 }

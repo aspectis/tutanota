@@ -1,63 +1,55 @@
 import {AdSyncOptimizer} from "./AdSyncOptimizer.js"
 import {SyncSessionMailbox} from "../SyncSessionMailbox.js"
-import {ImapSyncSessionProcess} from "../ImapSyncSessionProcess.js"
-import {ImapAccount} from "../ImapSyncState.js"
-import {AdSyncDownloadBlockSizeOptimizer} from "./AdSyncDownloadBlockSizeOptimizer.js"
-import {AdSyncEventListener} from "../AdSyncEventListener.js"
+import {SyncSessionEventListener} from "../ImapSyncSession.js"
 
 export interface AdSyncEfficiencyScoreOptimizerEventListener {
 	onEfficiencyScoreMeasured(processId: number, efficiencyScore: number, downloadedQuota: number): void
 
-	onFinish(processId: number, syncSessionMailbox: SyncSessionMailbox): void
+	onMailboxFinish(processId: number, syncSessionMailbox: SyncSessionMailbox): void
 }
 
 export class AdSyncEfficiencyScoreOptimizer extends AdSyncOptimizer implements AdSyncEfficiencyScoreOptimizerEventListener {
 
 	protected scheduler: NodeJS.Timer
-	private readonly imapAccount: ImapAccount
-	private readonly mailboxes: SyncSessionMailbox[]
-	private adSyncEventListener: AdSyncEventListener
+	private readonly optimizedMailboxes: SyncSessionMailbox[]
+	private syncSessionEventListener: SyncSessionEventListener
 	private lastAverageNormalizedEfficiencyScore: number = 0
 	private normalizedEfficiencyScores: Map<number, number> = new Map<number, number>()
 	private runningProcessCount: number = 0
-	private nextProcessId: number = 0
-	private runningSyncSessionProcesses: Map<number, ImapSyncSessionProcess> = new Map()
 	private downloadedQuota: number = 0
 
-	constructor(imapAccount: ImapAccount, mailboxes: SyncSessionMailbox[], adSyncEventListener: AdSyncEventListener, optimizationDifference: number) {
+	constructor(mailboxes: SyncSessionMailbox[], optimizationDifference: number, syncSessionEventListener: SyncSessionEventListener) {
 		super(optimizationDifference)
-		this.imapAccount = imapAccount
-		this.mailboxes = mailboxes
-		this.adSyncEventListener = adSyncEventListener
-		this.scheduler = setInterval(this.optimize, 30 * 1000) // every 30 seconds
+		this.optimizedMailboxes = mailboxes
+		this.syncSessionEventListener = syncSessionEventListener
+		this.scheduler = setInterval(this.optimize.bind(this), mailboxes[0].timeToLiveInterval * 1000) // every timeToLiveInterval many seconds
+		this.optimize() // call once
 	}
 
 	protected optimize(): void {
-		let averageNormalizedEfficiencyScore = this.averageNormalizedEfficiencyScore
+		let averageNormalizedEfficiencyScore = this.getAverageNormalizedEfficiencyScore()
 
-		if (averageNormalizedEfficiencyScore > this.lastAverageNormalizedEfficiencyScore) {
-			let nextMailboxToDownload = this.nextMailboxToDownload()
-			let adSyncDownloadBlockSizeOptimizer = new AdSyncDownloadBlockSizeOptimizer(nextMailboxToDownload, 10)
-			let syncSessionProcess = new ImapSyncSessionProcess(this.nextProcessId, this, this.imapAccount, adSyncDownloadBlockSizeOptimizer)
-			this.nextProcessId += 1
+		// TODO Check downloaded quota!
+		// TODO finish properly
 
-			this.runningSyncSessionProcesses.set(syncSessionProcess.processId, syncSessionProcess)
+		console.log("Score:" + averageNormalizedEfficiencyScore)
 
-			syncSessionProcess.startSyncSessionProcess(this.adSyncEventListener)
+		if (averageNormalizedEfficiencyScore >= this.lastAverageNormalizedEfficiencyScore) {
+			for (let index = 0; index < this.optimizationDifference; index++) { // create this.optimizationDifference many new processes
+				let nextMailboxToDownload = this.nextMailboxToDownload()
+				// TODO check that mailbox is not opened twice
+				this.syncSessionEventListener.onStartSyncSessionProcess(nextMailboxToDownload)
+				this.runningProcessCount += 1
+			}
 		} else {
-			let nextProcessIdToDrop = this.nextProcessIdToDrop()
-
-			let syncSessionProcessToDrop = this.runningSyncSessionProcesses.get(nextProcessIdToDrop)
-
-			syncSessionProcessToDrop?.stopSyncSessionProcess()
-			this.runningSyncSessionProcesses.delete(nextProcessIdToDrop)
+			for (let index = 0; index < this.optimizationDifference; index++) {
+				let nextProcessIdToDrop = this.nextProcessIdToDrop()
+				this.syncSessionEventListener.onStopSyncSessionProcess(nextProcessIdToDrop)
+				this.runningProcessCount -= 1
+			}
 		}
 
 		this.lastAverageNormalizedEfficiencyScore = averageNormalizedEfficiencyScore
-	}
-
-	stopAdSyncOptimizer(): void {
-		//TODO
 	}
 
 	onEfficiencyScoreMeasured(processId: number, efficiencyScore: number, downloadedQuota: number): void {
@@ -65,18 +57,28 @@ export class AdSyncEfficiencyScoreOptimizer extends AdSyncOptimizer implements A
 		this.downloadedQuota += downloadedQuota
 	}
 
-	onFinish(processId: number, syncSessionMailbox: SyncSessionMailbox): void {
-		// TODO
+	onMailboxFinish(processId: number, syncSessionMailbox: SyncSessionMailbox): void {
+		this.syncSessionEventListener.onStopSyncSessionProcess(processId)
+
+		let mailboxIndex = this.optimizedMailboxes.findIndex((mailbox) => {
+			return mailbox.mailboxState.path == syncSessionMailbox.mailboxState.path
+		})
+		this.optimizedMailboxes.splice(mailboxIndex, 1)
 	}
 
-	get averageNormalizedEfficiencyScore(): number {
-		return Array.from(this.normalizedEfficiencyScores.values()).reduce((acc, value) => {
-			return acc += value
-		}) / this.runningProcessCount
+	private getAverageNormalizedEfficiencyScore(): number {
+		if (this.normalizedEfficiencyScores.size == 0) {
+			return 0
+		} else {
+			return Array.from(this.normalizedEfficiencyScores.values()).reduce((acc, value) => {
+				acc += value
+				return acc
+			}) / this.runningProcessCount
+		}
 	}
 
 	private nextMailboxToDownload(): SyncSessionMailbox {
-		return this.mailboxes.sort((a, b: SyncSessionMailbox) => {
+		return this.optimizedMailboxes.sort((a, b: SyncSessionMailbox) => {
 			return a.efficiencyScore - b.efficiencyScore
 		})[0]
 	}
