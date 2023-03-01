@@ -1,9 +1,15 @@
 import { DAY_IN_MILLIS, downcast, filterInt, neverNull } from "@tutao/tutanota-utils"
 import { DateTime, IANAZone } from "luxon"
-import type { CalendarEvent } from "../../api/entities/tutanota/TypeRefs.js"
-import { CalendarEventAttendee, createCalendarEvent, createCalendarEventAttendee, createEncryptedMailAddress } from "../../api/entities/tutanota/TypeRefs.js"
-import type { AlarmInfo, RepeatRule } from "../../api/entities/sys/TypeRefs.js"
-import { createAlarmInfo, createRepeatRule } from "../../api/entities/sys/TypeRefs.js"
+import type { CalendarEvent, CalendarRepeatRule } from "../../api/entities/tutanota/TypeRefs.js"
+import {
+	CalendarEventAttendee,
+	createCalendarEvent,
+	createCalendarEventAttendee,
+	createCalendarRepeatRule,
+	createEncryptedMailAddress,
+} from "../../api/entities/tutanota/TypeRefs.js"
+import type { AlarmInfo } from "../../api/entities/sys/TypeRefs.js"
+import { createAlarmInfo } from "../../api/entities/sys/TypeRefs.js"
 import type { Parser } from "../../misc/parsing/ParserCombinator"
 import {
 	combineParsers,
@@ -322,7 +328,7 @@ function parseAlarm(alarmObject: ICalObject, event: CalendarEvent): AlarmInfo | 
 	})
 }
 
-export function parseRrule(rruleProp: Property, tzId: string | null): RepeatRule {
+export function parseRrule(rruleProp: Property, tzId: string | null): CalendarRepeatRule {
 	let rruleValue
 
 	try {
@@ -340,7 +346,7 @@ export function parseRrule(rruleProp: Property, tzId: string | null): RepeatRule
 	const count = rruleValue["COUNT"] ? parseInt(rruleValue["COUNT"]) : null
 	const endType: EndType = until != null ? EndType.UntilDate : count != null ? EndType.Count : EndType.Never
 	const interval = rruleValue["INTERVAL"] ? parseInt(rruleValue["INTERVAL"]) : 1
-	const repeatRule = createRepeatRule()
+	const repeatRule = createCalendarRepeatRule()
 	repeatRule.endValue = until ? String(until.getTime()) : count ? String(count) : null
 	repeatRule.endType = endType
 	repeatRule.interval = String(interval)

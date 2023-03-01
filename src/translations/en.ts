@@ -420,6 +420,8 @@ export default {
 		"deleteEmails_action": "Delete the selected emails",
 		"deleteEntryConfirm_msg": "Are you sure you want to delete this entry?",
 		"deleteEventConfirmation_msg": "Are you sure you want to delete this event?",
+		"deleteSingleEventRecurrence_msg": "Delete only this recurrence",
+		"deleteAllEventRecurrence_msg": "Delete all recurrences",
 		"deleteLanguageConfirmation_msg": "Are you sure you want to delete the entry for \"{language}\"?",
 		"deleteSharedCalendarConfirm_msg": "The calendar \"{calendar}\" is shared with other users.",
 		"deleteTemplateGroups_msg": "There are still template lists active which will need to be deleted before you can cancel the Business feature. This may include shared template lists or template lists belonging to your users.",

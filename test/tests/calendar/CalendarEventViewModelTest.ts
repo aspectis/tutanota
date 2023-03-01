@@ -2,7 +2,7 @@ import o from "ospec"
 // @ts-ignore[untyped-import]
 import en from "../../../src/translations/en.js"
 import type { Guest, SendMailPurpose } from "../../../src/calendar/date/CalendarEventViewModel.js"
-import { CalendarEventViewModel } from "../../../src/calendar/date/CalendarEventViewModel.js"
+import { areExcludedDatesEqual, CalendarEventViewModel } from "../../../src/calendar/date/CalendarEventViewModel.js"
 import { lang } from "../../../src/misc/LanguageViewModel.js"
 import { assertThrows, unmockAttribute } from "@tutao/tutanota-test-utils"
 import { addMapEntry, clone, delay, downcast, neverNull, noOp } from "@tutao/tutanota-utils"
@@ -22,7 +22,7 @@ import {
 } from "../../../src/api/entities/tutanota/TypeRefs.js"
 import { AccountType, AlarmInterval, assertEnumValue, CalendarAttendeeStatus, ShareCapability } from "../../../src/api/common/TutanotaConstants.js"
 import type { User } from "../../../src/api/entities/sys/TypeRefs.js"
-import { createGroupMembership, createPublicKeyReturn, createRepeatRule } from "../../../src/api/entities/sys/TypeRefs.js"
+import { createDateWrapper, createGroupMembership, createPublicKeyReturn, createRepeatRule } from "../../../src/api/entities/sys/TypeRefs.js"
 import type { CalendarUpdateDistributor } from "../../../src/calendar/date/CalendarUpdateDistributor.js"
 import type { UserController } from "../../../src/api/main/UserController.js"
 import type { CalendarInfo } from "../../../src/calendar/model/CalendarModel.js"
@@ -662,6 +662,14 @@ o.spec("CalendarEventViewModel", function () {
 			newEvent.repeatRule = createRepeatRule()
 			o(viewModel._hasChanges(newEvent)).equals(true)
 			newEvent.repeatRule = existingEvent.repeatRule
+			o(viewModel._hasChanges(newEvent)).equals(false)
+			newEvent.repeatRule = createRepeatRule({
+				excludedDates: [createDateWrapper({ date: new Date("2023-03-06T13:56:28.658Z") })],
+			})
+			o(viewModel._hasChanges(newEvent)).equals(true)
+			existingEvent.repeatRule = createRepeatRule({
+				excludedDates: newEvent.repeatRule!.excludedDates.slice(),
+			})
 			o(viewModel._hasChanges(newEvent)).equals(false)
 		})
 		o("do not ignore confidentiality", async function () {
@@ -3052,6 +3060,58 @@ o.spec("CalendarEventViewModel", function () {
 			const notAvailable = viewModel.shouldShowSendInviteNotAvailable()
 			o(notAvailable).equals(false)
 		})
+	})
+	o.spec("deleteExcludedDates", async function () {
+		o("clears the array", async function () {
+			const userController = makeUserController()
+			const viewModel = await init({
+				userController,
+				calendars: makeCalendars("own"),
+				existingEvent: createCalendarEvent({
+					repeatRule: createRepeatRule({
+						excludedDates: [createDateWrapper({ date: new Date("2023-03-13T00:00:00Z") })],
+					}),
+				}),
+			})
+
+			viewModel.deleteExcludedDates()
+			o(viewModel.repeat?.excludedDates).deepEquals([])
+		})
+	})
+	o.spec("excludeOccurences", function () {
+		// TODO
+	})
+})
+
+o.spec("areExcludedDatesEqual", function () {
+	o("empty arrays are equal", function () {
+		o(areExcludedDatesEqual([], [])).equals(true)
+	})
+	o("a nonempty array with an empty array is unequal", function () {
+		o(areExcludedDatesEqual([], [createDateWrapper({ date: new Date("2023-03-06T13:56:28.658Z") })])).equals(false)
+		o(areExcludedDatesEqual([createDateWrapper({ date: new Date("2023-03-06T13:56:28.658Z") })], [])).equals(false)
+	})
+	o("nonequal if an array is a subsequence of the other", function () {
+		const a = [createDateWrapper({ date: new Date("2023-03-06T13:56:28.658Z") }), createDateWrapper({ date: new Date("2023-03-09T13:56:28.658Z") })]
+		o(areExcludedDatesEqual(a, a.slice(1))).equals(false)
+	})
+
+	o("nonequal if the dates are different", function () {
+		o(
+			areExcludedDatesEqual(
+				[createDateWrapper({ date: new Date("2023-03-06T13:56:28.658Z") })],
+				[createDateWrapper({ date: new Date("2023-03-09T13:56:28.658Z") })],
+			),
+		).equals(false)
+	})
+
+	o("equal if the dates are the same", function () {
+		o(
+			areExcludedDatesEqual(
+				[createDateWrapper({ date: new Date("2023-03-06T13:56:28.658Z") })],
+				[createDateWrapper({ date: new Date("2023-03-06T13:56:28.658Z") })],
+			),
+		).equals(true)
 	})
 })
 

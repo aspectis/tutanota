@@ -424,6 +424,8 @@ export default {
 		"deleteEmails_action": "Lösche die ausgewählten E-Mails",
 		"deleteEntryConfirm_msg": "Möchtest du den Eintrag wirklich löschen?",
 		"deleteEventConfirmation_msg": "Möchtest du diesen Termin wirklich löschen?",
+		"deleteSingleEventRecurrence_msg": "Nur diese Wiederholung löschen",
+		"deleteAllEventRecurrence_msg": "Alle Wiederholungen löschen",
 		"deleteLanguageConfirmation_msg": "Willst du den Eintrag \"{language}\" wirklich löschen?",
 		"deleteSharedCalendarConfirm_msg": "Der Kalender \"{calendar}\" ist freigegeben für andere Benutzer. ",
 		"deleteTemplateGroups_msg": "Es sind noch Vorlagenlisten aktiv, die gelöscht werden müssen, bevor du das Business-Feature abbestellen kannst. Dazu können gemeinsam genutzte Vorlagenlisten oder Vorlagenlisten gehören, die deinen Benutzern zugeordnet sind.",
