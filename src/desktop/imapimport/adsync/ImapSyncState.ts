@@ -1,3 +1,5 @@
+import {ImapMailbox} from "./imapmail/ImapMailbox.js"
+
 export class ImapAccount {
 	host: string
 	port: number
@@ -35,6 +37,11 @@ export class MailboxState {
 		this.uidNext = uidNext
 		this.highestModSeq = highestModSeq
 		this.importedUidToMailMap = importedUidToMailMap
+	}
+
+	static fromImapMailbox(imapMailbox: ImapMailbox) {
+		// TODO Continue here!
+		return new MailboxState(imapMailbox.path, 0, 0,)
 	}
 }
 

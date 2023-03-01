@@ -3,13 +3,16 @@ import {SyncSessionMailbox} from "../SyncSessionMailbox.js"
 
 export class AdSyncDownloadBlockSizeOptimizer extends AdSyncOptimizer {
 	protected _optimizedSyncSessionMailbox: SyncSessionMailbox
-	protected scheduler: NodeJS.Timer
+	protected scheduler?: NodeJS.Timer
 	private lastNormalizedEfficiencyScore: number = 0
 
 	constructor(syncSessionMailbox: SyncSessionMailbox, optimizationDifference: number) {
 		super(optimizationDifference)
 		this._optimizedSyncSessionMailbox = syncSessionMailbox
-		this.scheduler = setInterval(this.optimize.bind(this), this.optimizedSyncSessionMailbox.timeToLiveInterval * 1000) // every timeToLiveInterval in seconds
+	}
+
+	startAdSyncOptimizer(): void {
+		this.scheduler = setInterval(this.optimize.bind(this), this.optimizedSyncSessionMailbox.timeToLiveInterval * 1000) // every timeToLiveInterval many seconds
 	}
 
 	get optimizedSyncSessionMailbox(): SyncSessionMailbox {

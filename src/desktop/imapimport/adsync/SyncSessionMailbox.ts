@@ -24,10 +24,9 @@ export class SyncSessionMailbox {
 	private size: number = 0
 	private mailCount: number = 0
 	private _averageMailSize: number = 0
-	timeToLiveInterval: number = 60
+	timeToLiveInterval: number = 60 // in seconds
 	private importance: SyncSessionMailboxImportance = SyncSessionMailboxImportance.MEDIUM
 	private _currentThroughput: number = 0.000001
-	private _efficiencyScore: number = 1
 	private efficiencyScoreTTLIntervalSum: number = 0
 	private _efficiencyScoreTTLIntervalHistory: number[] = []
 	private lastEfficiencyScoreUpdate: number = Date.now()
@@ -81,11 +80,12 @@ export class SyncSessionMailbox {
 	set currentThroughput(value: number) {
 		this._currentThroughput = value
 
-		if (this.lastEfficiencyScoreUpdate + this.timeToLiveInterval <= Date.now()) {
-			this.lastEfficiencyScoreUpdate = Date.now()
-			let averageEfficiencyScoreTTLInterval = this.efficiencyScoreTTLIntervalSum / this.timeToLiveInterval // TODO is this correct?
+		let now = Date.now()
+		if (this.lastEfficiencyScoreUpdate + this.timeToLiveInterval <= now) {
+			let averageEfficiencyScoreTTLInterval = this.efficiencyScoreTTLIntervalSum / (now - this.lastEfficiencyScoreUpdate)
 			this._efficiencyScoreTTLIntervalHistory.push(averageEfficiencyScoreTTLInterval)
 			this.efficiencyScoreTTLIntervalSum = 0
+			this.lastEfficiencyScoreUpdate = now
 		} else {
 			this.efficiencyScoreTTLIntervalSum += value
 		}

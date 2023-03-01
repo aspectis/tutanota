@@ -1,7 +1,7 @@
 import {ImapAdSync} from "./adsync/ImapAdSync.js";
 import {ImapImportState, ImportState} from "./ImapImportState.js";
 import {AdSyncEventListener} from "./adsync/AdSyncEventListener.js"
-import {ImapMailbox} from "./adsync/imapmail/ImapMailbox.js"
+import {ImapMailbox, ImapMailboxStatus} from "./adsync/imapmail/ImapMailbox.js"
 import {ImapMail} from "./adsync/imapmail/ImapMail.js"
 import {ImapError} from "./adsync/imapmail/ImapError.js"
 import {SyncSessionState} from "./adsync/ImapSyncSession.js"
@@ -10,7 +10,6 @@ export class ImapImporter implements AdSyncEventListener {
 
 	private imapAdSync: ImapAdSync | null = null
 	private imapImportState: ImapImportState = new ImapImportState(ImportState.PAUSED, new Date(Date.now()))
-
 	private testCounter = 0
 
 	constructor(
@@ -31,7 +30,7 @@ export class ImapImporter implements AdSyncEventListener {
 		return this.getImportStateFromSyncSessionState(syncSessionState)
 	}
 
-	async abortImport(): Promise<boolean> {
+	async deleteImport(): Promise<boolean> {
 		// TODO delete import
 		return true
 	}
@@ -46,26 +45,36 @@ export class ImapImporter implements AdSyncEventListener {
 	}
 
 	onMailbox(mailbox: ImapMailbox): void {
+
 	}
 
 	onMail(mail: ImapMail): void {
+		console.log("onMail " + mail)
 		this.testCounter += 1
-		console.log(mail)
 		console.log(this.testCounter)
 	}
 
 	onPostpone(postponedUntil: Date): void {
+		console.log("onPostpone " + postponedUntil)
 	}
 
 	onFinish(): void {
+		console.log("onFinish")
 	}
 
 	onError(error: ImapError): void {
+		console.log("onError " + error)
 	}
 
 	onMailUpdate(updatedMail: ImapMail): void {
+		console.log("onMailUpdate " + updatedMail)
 	}
 
 	onMailboxUpdate(updatedMailbox: ImapMailbox): void {
+		console.log("onMailboxUpdate " + updatedMailbox)
+	}
+
+	onMailboxStatusUpdate(updatedMailboxStatus: ImapMailboxStatus): void{
+
 	}
 }

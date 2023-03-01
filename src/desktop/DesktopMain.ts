@@ -338,8 +338,8 @@ async function main(components: Components) {
 	integrator.runIntegration(wm)
 
 	// TODO remove
-	let imapAccount = new ImapAccount("imapserver", 993, "johannes").setPassword("Wsw6r6dzEH7Y9mDJ")
-	let mailboxStates = [new MailboxState("\TestNew", 1, 2130230, 0, new Map<number, IdTuple>()), new MailboxState("\Test", 1, 2323, 0, new Map<number, IdTuple>())]
+	let imapAccount = new ImapAccount("", 993, "").setPassword("")
+	let mailboxStates = [new MailboxState("\Inbox", 1, 2130230, 0, new Map<number, IdTuple>()), new MailboxState("\Sent", 1, 2323, 0, new Map<number, IdTuple>())]
 	let imapSyncState = new ImapSyncState(imapAccount, 2500, mailboxStates)
 	let imapAdSync = new ImapAdSync(imapSyncState)
 	let imapImporter = new ImapImporter(imapAdSync)

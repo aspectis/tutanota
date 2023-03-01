@@ -51,7 +51,6 @@ export class ImportMailFacade {
 	) {
 	}
 
-	// TODO might be beneficial to supply one ImapMail object?
 	async importMail({
 						 subject,
 						 bodyText,
