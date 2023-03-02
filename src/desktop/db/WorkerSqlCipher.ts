@@ -14,7 +14,7 @@ export class WorkerSqlCipher implements SqlCipherFacade {
 		console.log("new sqlcipherworker")
 		const worker = new Worker(path.join(__dirname, "db", "sqlworker.js"), {
 			workerData: {
-				nativeBindingPath,
+				nativeBindingPath: "../better_sqlite3.node", //nativeBindingPath,
 				dbPath,
 				integrityCheck,
 			},
