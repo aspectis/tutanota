@@ -2,9 +2,8 @@ import { SqlCipherFacade } from "../../native/common/generatedipc/SqlCipherFacad
 import { TaggedSqlValue } from "../../api/worker/offline/SqlValue.js"
 import { Worker } from "node:worker_threads"
 import path from "node:path"
-import { MessageDispatcher, Request, WebWorkerTransport } from "../../api/common/MessageDispatcher.js"
+import { MessageDispatcher, NodeWorkerTransport, Request, WebWorkerTransport } from "../../api/common/MessageDispatcher.js"
 import { SqlCipherCommand } from "./sqlworker.js"
-import { downcast } from "@tutao/tutanota-utils"
 
 const TAG = "[WorkerSqlCipher]"
 
@@ -12,6 +11,7 @@ export class WorkerSqlCipher implements SqlCipherFacade {
 	private readonly dispatcher: MessageDispatcher<SqlCipherCommand, never>
 
 	constructor(private readonly nativeBindingPath: string, private readonly dbPath: string, private readonly integrityCheck: boolean) {
+		console.log("new sqlcipherworker")
 		const worker = new Worker(path.join(__dirname, "db", "sqlworker.js"), {
 			workerData: {
 				nativeBindingPath,
@@ -19,14 +19,7 @@ export class WorkerSqlCipher implements SqlCipherFacade {
 				integrityCheck,
 			},
 		})
-		const workerWrapper = {
-			set onmessage(value: DedicatedWorkerGlobalScope["onmessage"]) {
-				worker!.on("message", downcast(value))
-			},
-			postMessage: worker.postMessage,
-		}
-
-		this.dispatcher = new MessageDispatcher<SqlCipherCommand, never>(new WebWorkerTransport<SqlCipherCommand, never>(downcast(workerWrapper)), {})
+		this.dispatcher = new MessageDispatcher<SqlCipherCommand, never>(new NodeWorkerTransport<SqlCipherCommand, never>(worker), {})
 	}
 
 	async all(query: string, params: ReadonlyArray<TaggedSqlValue>): Promise<ReadonlyArray<Record<string, TaggedSqlValue>>> {

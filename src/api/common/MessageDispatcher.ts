@@ -35,7 +35,24 @@ export class WebWorkerTransport<OutgoingCommandType, IncomingCommandType> implem
 	}
 
 	setMessageHandler(handler: (message: Message<IncomingCommandType>) => unknown) {
-		this.worker.onmessage = (ev: MessageEvent) => handler(downcast(ev.data))
+		this.worker.onmessage = (ev: any) => handler(downcast(ev.data))
+	}
+}
+
+type NodeWorkerPort<O, I> = {
+	postMessage: (msg: Message<O>) => void
+	on: (channel: "message", listener: (ev: Message<I>) => unknown) => unknown
+}
+
+export class NodeWorkerTransport<OutgoingCommandType, IncomingCommandType> implements Transport<OutgoingCommandType, IncomingCommandType> {
+	constructor(private readonly worker: NodeWorkerPort<OutgoingCommandType, IncomingCommandType>) {}
+
+	postMessage(message: Message<OutgoingCommandType>): void {
+		return this.worker.postMessage(message)
+	}
+
+	setMessageHandler(handler: (message: Message<IncomingCommandType>) => unknown) {
+		this.worker.on("message", (ev: Message<IncomingCommandType>) => handler(ev))
 	}
 }
 
@@ -111,7 +128,7 @@ export class MessageDispatcher<OutgoingRequestType extends string, IncomingReque
 			try {
 				this._transport.postMessage(msg)
 			} catch (e) {
-				console.log("error payload:", msg.id, msg.type)
+				console.log("error payload:", msg)
 				throw e
 			}
 		})

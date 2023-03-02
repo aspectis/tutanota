@@ -1,8 +1,7 @@
 import { parentPort, workerData } from "node:worker_threads"
 import { DesktopSqlCipher } from "./DesktopSqlCipher.js"
-import { MessageDispatcher, Request, WebWorkerTransport } from "../../api/common/MessageDispatcher.js"
+import { MessageDispatcher, NodeWorkerTransport, Request } from "../../api/common/MessageDispatcher.js"
 import { SqlCipherFacade } from "../../native/common/generatedipc/SqlCipherFacade.js"
-import { downcast } from "@tutao/tutanota-utils"
 
 console.log("hello from worker", workerData)
 
@@ -10,13 +9,8 @@ export type SqlCipherCommand = keyof SqlCipherFacade | "exit"
 
 if (parentPort != null) {
 	const sqlCipherFacade = new DesktopSqlCipher(workerData.nativeBindingPath, workerData.dbPath, workerData.integrityCheck)
-	const worker = {
-		set onmessage(value: Worker["onmessage"]) {
-			parentPort!.on("message", downcast(value))
-		},
-		postMessage: parentPort.postMessage,
-	}
-	const workerTransport = new MessageDispatcher(new WebWorkerTransport<never, SqlCipherCommand>(downcast(worker)), {
+
+	const workerTransport = new MessageDispatcher(new NodeWorkerTransport<never, SqlCipherCommand>(parentPort), {
 		all(msg: Request<"openDb" | "closeDb" | "deleteDb" | "run" | "get" | "all" | "lockRangesDbAccess" | "unlockRangesDbAccess">): Promise<any> {
 			return sqlCipherFacade.all(msg.args[0], msg.args[1])
 		},
