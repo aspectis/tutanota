@@ -491,6 +491,7 @@ function createRepeatRuleForCalendarRepeatRule(calendarRepeatRule: CalendarRepea
 		frequency: calendarRepeatRule.frequency,
 		interval: calendarRepeatRule.interval,
 		timeZone: calendarRepeatRule.timeZone,
+		excludedDates: calendarRepeatRule.excludedDates,
 	})
 }
 

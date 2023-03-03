@@ -11,8 +11,7 @@ import {
 } from "../../api/common/TutanotaConstants"
 import type { CalendarEvent, CalendarRepeatRule, Contact, EncryptedMailAddress, Mail, MailboxProperties } from "../../api/entities/tutanota/TypeRefs.js"
 import { createCalendarEvent, createCalendarEventAttendee, createEncryptedMailAddress } from "../../api/entities/tutanota/TypeRefs.js"
-import type { AlarmInfo, RepeatRule } from "../../api/entities/sys/TypeRefs.js"
-import { createAlarmInfo } from "../../api/entities/sys/TypeRefs.js"
+import { AlarmInfo, createAlarmInfo, createDateWrapper, RepeatRule } from "../../api/entities/sys/TypeRefs.js"
 import type { MailboxDetail } from "../../mail/model/MailModel"
 import stream from "mithril/stream"
 import Stream from "mithril/stream"
@@ -97,6 +96,7 @@ export type RepeatData = {
 	interval: number
 	endType: EndType
 	endValue: number
+	excludedDates: Array<Date>
 }
 type ShowProgressCallback = (arg0: Promise<unknown>) => unknown
 type InitEventTypeReturn = {
@@ -286,6 +286,7 @@ export class CalendarEventViewModel {
 				interval: Number(existingRule.interval),
 				endType: downcast(existingRule.endType),
 				endValue: existingRule.endType === EndType.Count ? Number(existingRule.endValue) : 1,
+				excludedDates: existingRule.excludedDates.map(({ date }) => date),
 			}
 
 			if (existingRule.endType === EndType.UntilDate) {
@@ -627,6 +628,7 @@ export class CalendarEventViewModel {
 					endType: EndType.Never,
 					endValue: 1,
 					frequency: repeatPeriod,
+					excludedDates: [],
 				},
 				this.repeat,
 				{
@@ -1029,6 +1031,7 @@ export class CalendarEventViewModel {
 		const repeatRule = createRepeatRuleWithValues(repeat.frequency, interval)
 		const stopType = repeat.endType
 		repeatRule.endType = stopType
+		repeatRule.excludedDates = repeat.excludedDates.map((date) => createDateWrapper({ date }))
 
 		if (stopType === EndType.Count) {
 			const count = repeat.endValue
