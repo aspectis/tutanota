@@ -1,5 +1,5 @@
 import {SyncSessionMailbox} from "./SyncSessionMailbox.js"
-import {AdSyncEventListener} from "./AdSyncEventListener.js"
+import {AdSyncEventListener, AdSyncEventType} from "./AdSyncEventListener.js"
 import {ImapAccount} from "./ImapSyncState.js"
 import {ImapMail} from "./imapmail/ImapMail.js"
 // @ts-ignore // TODO define types
@@ -98,10 +98,12 @@ export class ImapSyncSessionProcess {
 			highestModseq: true,
 		})
 
-		// TODO WIP make sure that the mailboxState is updated locally
-		this.adSyncOptimizer.optimizedSyncSessionMailbox
-		adSyncEventListener.onMailboxStatusUpdate(ImapMailboxStatus.fromImapFlowStatusObject(status))
-
+		let imapMailboxStatus = ImapMailboxStatus.fromImapFlowStatusObject(status)
+		this.adSyncOptimizer.optimizedSyncSessionMailbox.mailboxState
+			.setUidValidity(imapMailboxStatus.uidValidity)
+			.setUidNext(imapMailboxStatus.uidNext)
+			.setUidHighestModSeq(imapMailboxStatus.highestModSeq)
+		adSyncEventListener.onMailboxStatus(imapMailboxStatus)
 
 		let lock = await imapClient.getMailboxLock(this.adSyncOptimizer.optimizedSyncSessionMailbox.mailboxState.path, {readonly: true})
 
@@ -116,7 +118,10 @@ export class ImapSyncSessionProcess {
 			let isInitialSeqFetch = !isNaN(lastFetchedUid)
 			await fetchUidRange.initFetchUidRange(isInitialSeqFetch ? 1 : lastFetchedUid, this.adSyncOptimizer.optimizedSyncSessionMailbox.normalizedDownloadBlockSize, !isInitialSeqFetch)
 
-			while (fetchUidRange.toUid && fetchUidRange.toUid < this.adSyncOptimizer.optimizedSyncSessionMailbox.mailboxState.uidNext) {
+			while (fetchUidRange.toUid
+				&& this.adSyncOptimizer.optimizedSyncSessionMailbox.mailboxState.uidNext
+				&& fetchUidRange.toUid < this.adSyncOptimizer.optimizedSyncSessionMailbox.mailboxState.uidNext
+				) {
 				let mailFetchStartTime = Date.now()
 				let mails = imapClient.fetch(
 					`${fetchUidRange.fromUid}:${fetchUidRange.toUid}`,
@@ -156,11 +161,8 @@ export class ImapSyncSessionProcess {
 
 					// TODO What happens if only flags updated but IMAP server does not support QRESYNC?
 					// TODO check if email is already downloaded before downloading the actual data
-					if (this.adSyncOptimizer.optimizedSyncSessionMailbox.mailboxState.importedUidToMailMap.has(mail.uid)) {
-						adSyncEventListener.onMailUpdate(imapMail)
-					} else {
-						adSyncEventListener.onMail(imapMail)
-					}
+					let isMailUpdate = this.adSyncOptimizer.optimizedSyncSessionMailbox.mailboxState.importedUidToMailMap.has(mail.uid)
+					adSyncEventListener.onMail(imapMail, isMailUpdate ? AdSyncEventType.UPDATE : AdSyncEventType.CREATE)
 				}
 
 				await fetchUidRange.continueFetchUidRange(this.adSyncOptimizer.optimizedSyncSessionMailbox.normalizedDownloadBlockSize)

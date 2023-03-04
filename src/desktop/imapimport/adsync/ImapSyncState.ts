@@ -26,22 +26,33 @@ export class ImapAccount {
 
 export class MailboxState {
 	path: string
-	uidValidity: number
-	uidNext: number
-	highestModSeq: number
+	uidValidity?: bigint
+	uidNext?: number
+	highestModSeq?: bigint | null // null indicates that the CONDSTORE IMAP extension, and therefore highestModSeq, is not supported
 	importedUidToMailMap: Map<number, IdTuple>
 
-	constructor(path: string, uidValidity: number, uidNext: number, highestModSeq: number, importedUidToMailMap: Map<number, IdTuple>) {
+	constructor(path: string, importedUidToMailMap: Map<number, IdTuple>) {
 		this.path = path
-		this.uidValidity = uidValidity
-		this.uidNext = uidNext
-		this.highestModSeq = highestModSeq
 		this.importedUidToMailMap = importedUidToMailMap
 	}
 
+	setUidValidity(uidValidity: bigint): this {
+		this.uidValidity = uidValidity
+		return this
+	}
+
+	setUidNext(uidNext: number): this {
+		this.uidNext = uidNext
+		return this
+	}
+
+	setUidHighestModSeq(highestModSeq: bigint | null): this {
+		this.highestModSeq = highestModSeq
+		return this
+	}
+
 	static fromImapMailbox(imapMailbox: ImapMailbox) {
-		// TODO Continue here!
-		return new MailboxState(imapMailbox.path, 0, 0,)
+		return new MailboxState(imapMailbox.path, new Map<number, IdTuple>())
 	}
 }
 

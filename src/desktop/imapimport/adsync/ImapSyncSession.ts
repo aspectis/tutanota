@@ -1,6 +1,6 @@
 import {SyncSessionMailbox} from "./SyncSessionMailbox.js"
 import {ImapSyncState, MailboxState} from "./ImapSyncState.js"
-import {AdSyncEventListener} from "./AdSyncEventListener.js"
+import {AdSyncEventListener, AdSyncEventType} from "./AdSyncEventListener.js"
 import {AdSyncEfficiencyScoreOptimizer} from "./optimizer/AdSyncEfficiencyScoreOptimizer.js"
 import {ImapSyncSessionProcess} from "./ImapSyncSessionProcess.js"
 import {AdSyncDownloadBlockSizeOptimizer} from "./optimizer/AdSyncDownloadBlockSizeOptimizer.js"
@@ -103,25 +103,47 @@ export class ImapSyncSession implements SyncSessionEventListener {
 
 		await imapClient.connect()
 		let listTreeResponse = await imapClient.listTree()
-
 		let fetchedMailboxTree = ImapMailbox.fromImapFlowListTreeResponse(listTreeResponse)
-		let mailboxes = this.getSyncSessionMailboxes(knownMailboxes, fetchedMailboxTree, imapClient)
-
 		await imapClient.logout()
-		return mailboxes
+
+		return this.getSyncSessionMailboxes(knownMailboxes, fetchedMailboxTree)
 	}
 
-	private getSyncSessionMailboxes(knownMailboxes: SyncSessionMailbox[], fetchedMailboxTree: ImapMailbox, imapClient: typeof ImapFlow): SyncSessionMailbox[] {
+	private getSyncSessionMailboxes(knownMailboxes: SyncSessionMailbox[], fetchedMailboxTree: ImapMailbox): SyncSessionMailbox[] {
+		let resultMailboxes = this.traverseImapMailboxes(knownMailboxes, fetchedMailboxTree)
 
+		knownMailboxes.map(knownMailbox => {
+			let index = resultMailboxes.findIndex(mailbox => {
+				return mailbox.mailboxState.path == knownMailbox.mailboxState.path
+			})
+
+			if (index == -1) {
+				let deletedImapMailbox = ImapMailbox.fromSyncSessionMailbox(knownMailbox)
+				this.adSyncEventListener?.onMailbox(deletedImapMailbox, AdSyncEventType.DELETE)
+				return true
+			}
+
+			return false
+		})
+
+		return resultMailboxes
 	}
 
-	// TODO Continue here!
-	private traverseImapMailboxes(knowwMailboxes: SyncSessionMailbox[], imapMailbox: ImapMailbox, imap): SyncSessionMailbox[] {
-		let index = knowwMailboxes.findIndex(value => value.mailboxState.path == imapMailbox.path)
+	private traverseImapMailboxes(knownMailboxes: SyncSessionMailbox[], imapMailbox: ImapMailbox): SyncSessionMailbox[] {
+		let result = []
 
+		let index = knownMailboxes.findIndex(value => value.mailboxState.path == imapMailbox.path)
 		if (index == -1) {
-			knowwMailboxes.push(new SyncSessionMailbox(MailboxState.fromImapMailbox(imapMailbox)))
+			let syncSessionMailbox = new SyncSessionMailbox(MailboxState.fromImapMailbox(imapMailbox))
+			result.push(syncSessionMailbox)
+
+			this.adSyncEventListener?.onMailbox(imapMailbox, AdSyncEventType.CREATE)
 		}
+
+		imapMailbox.subFolders?.forEach(imapMailbox => {
+			result.push(...this.traverseImapMailboxes(knownMailboxes, imapMailbox))
+		})
+		return result
 	}
 
 	private isExistRunningProcessForMailbox(nextMailboxToDownload: SyncSessionMailbox) {

@@ -1,16 +1,18 @@
 import {ListTreeResponse, StatusObject} from "imapflow"
+import {SyncSessionMailbox} from "../SyncSessionMailbox.js"
 
 export class ImapMailboxStatus {
 	path: string
 	messageCount?: number
 	uidNext: number
 	uidValidity: bigint
-	highestModSeq?: bigint
+	highestModSeq: bigint | null // null indicates that the CONDSTORE IMAP extension, and therefore highestModSeq, is not supported
 
-	constructor(path: string, uidNext: number, uidValidity: bigint) {
+	constructor(path: string, uidNext: number, uidValidity: bigint, highestModSeq: bigint | null) {
 		this.path = path
 		this.uidNext = uidNext
 		this.uidValidity = uidValidity
+		this.highestModSeq = highestModSeq
 	}
 
 	setMessageCount(messageCount: number): this {
@@ -18,23 +20,14 @@ export class ImapMailboxStatus {
 		return this
 	}
 
-	setHighestModSeq(highestModSeq: bigint): this {
-		this.highestModSeq = highestModSeq
-		return this
-	}
-
 	static fromImapFlowStatusObject(statusObject: StatusObject): ImapMailboxStatus {
 		// @ts-ignore // TODO types
-		let imapMailboxStatus = new ImapMailboxStatus(statusObject.path, statusObject.uidNext, statusObject.uidValidity)
+		let imapMailboxStatus = new ImapMailboxStatus(statusObject.path, statusObject.uidNext, statusObject.uidValidity, statusObject.highestModSeq)
 
 		// @ts-ignore
 		if (statusObject.messages) {
 			// @ts-ignore
 			imapMailboxStatus.setMessageCount(statusObject.messages)
-		}
-
-		if (statusObject.highestModSeq) {
-			imapMailboxStatus.setHighestModSeq(statusObject.highestModSeq)
 		}
 
 		return imapMailboxStatus
@@ -43,29 +36,41 @@ export class ImapMailboxStatus {
 
 export class ImapMailbox {
 
-	name: string
+	name?: string
 	path: string
-	pathDelimiter: string
-	flags: string[]
-	specialUse: string
-	disabled: boolean
+	pathDelimiter?: string
+	flags?: string[]
+	specialUse?: string
+	disabled?: boolean
 	subFolders?: ImapMailbox[]
-	status?: ImapMailboxStatus
 
-	constructor(
-		name: string,
-		path: string,
-		pathDelimiter: string,
-		flags: string[],
-		specialUse: string,
-		disabled: boolean,
-	) {
-		this.name = name
+	constructor(path: string) {
 		this.path = path
+	}
+
+	setName(name: string): this {
+		this.name = name
+		return this
+	}
+
+	setPathDelimiter(pathDelimiter: string): this {
 		this.pathDelimiter = pathDelimiter
+		return this
+	}
+
+	setFlags(flags: string[]): this {
 		this.flags = flags
+		return this
+	}
+
+	setSpecialUse(specialUse: string): this {
 		this.specialUse = specialUse
+		return this
+	}
+
+	setDisabled(disabled: boolean): this {
 		this.disabled = disabled
+		return this
 	}
 
 	setSubFolders(subFolders: ImapMailbox[]): this {
@@ -73,21 +78,17 @@ export class ImapMailbox {
 		return this
 	}
 
-	setStatus(status: ImapMailboxStatus): this {
-		this.status = status
-		return this
+	static fromImapFlowListTreeResponse(listTreeResponse: ListTreeResponse): ImapMailbox {
+		return new ImapMailbox(listTreeResponse.path)
+			.setName(listTreeResponse.name)
+			.setPathDelimiter(listTreeResponse.delimiter)
+			.setFlags(listTreeResponse.flags)
+			.setSpecialUse(listTreeResponse.specialUse)
+			.setDisabled(listTreeResponse.disabled)
+			.setSubFolders(listTreeResponse.folders.map(value => ImapMailbox.fromImapFlowListTreeResponse(value)))
 	}
 
-	static fromImapFlowListTreeResponse(listTreeResponse: ListTreeResponse) {
-		let imapMailbox = new ImapMailbox(
-			listTreeResponse.name,
-			listTreeResponse.path,
-			listTreeResponse.delimiter,
-			listTreeResponse.flags,
-			listTreeResponse.specialUse,
-			listTreeResponse.disabled,
-		).setSubFolders(listTreeResponse.folders.map(value => ImapMailbox.fromImapFlowListTreeResponse(value)))
-
-		return imapMailbox
+	static fromSyncSessionMailbox(syncSessionMailbox: SyncSessionMailbox): ImapMailbox {
+		return new ImapMailbox(syncSessionMailbox.mailboxState.path)
 	}
 }

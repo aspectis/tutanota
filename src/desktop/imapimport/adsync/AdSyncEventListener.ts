@@ -2,17 +2,19 @@ import {ImapMailbox, ImapMailboxStatus} from "./imapmail/ImapMailbox.js"
 import {ImapMail} from "./imapmail/ImapMail.js"
 import {ImapError} from "./imapmail/ImapError.js"
 
+export enum AdSyncEventType {
+	CREATE,
+	UPDATE,
+	DELETE,
+}
+
 export interface AdSyncEventListener {
 
-	onMailbox(newMailbox: ImapMailbox): void
+	onMailbox(mailbox: ImapMailbox, eventType: AdSyncEventType): void
 
-	onMailboxUpdate(updatedMailbox: ImapMailbox): void
+	onMailboxStatus(mailboxStatus: ImapMailboxStatus): void
 
-	onMailboxStatusUpdate(updatedMailboxStatus: ImapMailboxStatus): void
-
-	onMail(newMail: ImapMail): void
-
-	onMailUpdate(updatedMail: ImapMail): void
+	onMail(mail: ImapMail, eventType: AdSyncEventType): void
 
 	onPostpone(postponedUntil: Date): void
 
