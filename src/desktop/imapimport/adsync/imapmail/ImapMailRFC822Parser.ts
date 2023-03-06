@@ -33,8 +33,7 @@ export class ImapMailRFC822Parser {
 					let binary = await this.bufferFromStream(data.content)
 					let imapMailAttachment = new ImapMailAttachment(data.size, data.contentType, binary)
 					parsedImapRFC822.parsedAttachments?.push(imapMailAttachment)
-
-					data.content.on('end', () => data.release())
+					data.release()
 				}
 			})
 

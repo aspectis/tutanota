@@ -25,7 +25,7 @@ export interface SyncSessionEventListener {
 
 	onDownloadQuotaUpdate(downloadedQuota: number): void
 
-	onAllMailboxesFinish(): void
+	onAllMailboxesFinish(): Promise<void>
 }
 
 export class ImapSyncSession implements SyncSessionEventListener {
@@ -36,7 +36,6 @@ export class ImapSyncSession implements SyncSessionEventListener {
 	private nextProcessId: number = 0
 	private runningSyncSessionProcesses: Map<number, ImapSyncSessionProcess> = new Map()
 	private downloadedQuota: number = 0
-
 
 	constructor(imapSyncState: ImapSyncState) {
 		this.imapSyncState = imapSyncState
@@ -75,7 +74,7 @@ export class ImapSyncSession implements SyncSessionEventListener {
 	private async runSyncSession(adSyncEventListener: AdSyncEventListener) {
 		let mailboxes = await this.setupSyncSession(adSyncEventListener)
 
-		this.adSyncOptimizer = new AdSyncEfficiencyScoreOptimizer(mailboxes, 1, this)
+		this.adSyncOptimizer = new AdSyncEfficiencyScoreOptimizer(mailboxes, 3, this)
 		this.adSyncOptimizer.startAdSyncOptimizer()
 	}
 
@@ -103,14 +102,20 @@ export class ImapSyncSession implements SyncSessionEventListener {
 
 		await imapClient.connect()
 		let listTreeResponse = await imapClient.listTree()
-		let fetchedMailboxTree = ImapMailbox.fromImapFlowListTreeResponse(listTreeResponse)
 		await imapClient.logout()
 
-		return this.getSyncSessionMailboxes(knownMailboxes, fetchedMailboxTree)
+		let fetchedRootMailboxes = listTreeResponse.folders.map(listTreeResponse => {
+			return ImapMailbox.fromImapFlowListTreeResponse(listTreeResponse, false)
+		})
+
+		return this.getSyncSessionMailboxes(knownMailboxes, fetchedRootMailboxes)
 	}
 
-	private getSyncSessionMailboxes(knownMailboxes: SyncSessionMailbox[], fetchedMailboxTree: ImapMailbox): SyncSessionMailbox[] {
-		let resultMailboxes = this.traverseImapMailboxes(knownMailboxes, fetchedMailboxTree)
+	private getSyncSessionMailboxes(knownMailboxes: SyncSessionMailbox[], fetchedRootMailboxes: ImapMailbox[]): SyncSessionMailbox[] {
+		let resultMailboxes: SyncSessionMailbox[] = []
+		fetchedRootMailboxes.forEach(fetchedRootMailbox => {
+			resultMailboxes.push(...this.traverseImapMailboxes(knownMailboxes, fetchedRootMailbox))
+		})
 
 		knownMailboxes.map(knownMailbox => {
 			let index = resultMailboxes.findIndex(mailbox => {
@@ -134,22 +139,23 @@ export class ImapSyncSession implements SyncSessionEventListener {
 
 		let index = knownMailboxes.findIndex(value => value.mailboxState.path == imapMailbox.path)
 		if (index == -1) {
-			let syncSessionMailbox = new SyncSessionMailbox(MailboxState.fromImapMailbox(imapMailbox))
-			result.push(syncSessionMailbox)
-
 			this.adSyncEventListener?.onMailbox(imapMailbox, AdSyncEventType.CREATE)
+		}
+
+		let syncSessionMailbox = new SyncSessionMailbox(MailboxState.fromImapMailbox(imapMailbox))
+		if (imapMailbox.specialUse) {
+			syncSessionMailbox.specialUse = imapMailbox.specialUse
+		}
+
+		// some settings lead to a efficiencyScore of 0 (zero) which means that the mailbox should not be migrated
+		if (syncSessionMailbox.efficiencyScore != 0) {
+			result.push(syncSessionMailbox)
 		}
 
 		imapMailbox.subFolders?.forEach(imapMailbox => {
 			result.push(...this.traverseImapMailboxes(knownMailboxes, imapMailbox))
 		})
 		return result
-	}
-
-	private isExistRunningProcessForMailbox(nextMailboxToDownload: SyncSessionMailbox) {
-		return Array.from(this.runningSyncSessionProcesses.values()).find(syncProcess => {
-			return syncProcess.getProcessMailbox().mailboxState.path == nextMailboxToDownload.mailboxState.path
-		})
 	}
 
 	onStartSyncSessionProcess(nextMailboxToDownload: SyncSessionMailbox): void {
@@ -163,16 +169,13 @@ export class ImapSyncSession implements SyncSessionEventListener {
 			throw new ProgrammingError("The AdSyncEventListener has not been set!")
 		}
 
-		// we only want one process per IMAP mailbox
-		if (!this.isExistRunningProcessForMailbox(nextMailboxToDownload)) {
-			let adSyncDownloadBlockSizeOptimizer = new AdSyncDownloadBlockSizeOptimizer(nextMailboxToDownload, 10)
-			let syncSessionProcess = new ImapSyncSessionProcess(this.nextProcessId, this.adSyncOptimizer, this.imapSyncState.imapAccount, adSyncDownloadBlockSizeOptimizer)
-			this.nextProcessId += 1
+		let adSyncDownloadBlockSizeOptimizer = new AdSyncDownloadBlockSizeOptimizer(nextMailboxToDownload, 10)
+		let syncSessionProcess = new ImapSyncSessionProcess(this.nextProcessId, this.adSyncOptimizer, this.imapSyncState.imapAccount, adSyncDownloadBlockSizeOptimizer)
+		this.nextProcessId += 1
 
-			this.runningSyncSessionProcesses.set(syncSessionProcess.processId, syncSessionProcess)
-			syncSessionProcess.startSyncSessionProcess(this.adSyncEventListener)
-			adSyncDownloadBlockSizeOptimizer.startAdSyncOptimizer()
-		}
+		this.runningSyncSessionProcesses.set(syncSessionProcess.processId, syncSessionProcess)
+		syncSessionProcess.startSyncSessionProcess(this.adSyncEventListener)
+		adSyncDownloadBlockSizeOptimizer.startAdSyncOptimizer()
 	}
 
 	onStopSyncSessionProcess(nextProcessIdToDrop: number): void {
@@ -192,10 +195,10 @@ export class ImapSyncSession implements SyncSessionEventListener {
 		}
 	}
 
-	onAllMailboxesFinish(): void {
+	async onAllMailboxesFinish(): Promise<void> {
 		this.state = SyncSessionState.FINISHED
+		await this.shutDownSyncSession(false)
 		this.adSyncEventListener?.onFinish()
-		this.shutDownSyncSession(false)
 	}
 
 }

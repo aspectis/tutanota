@@ -1,4 +1,3 @@
-import {ListTreeResponse, StatusObject} from "imapflow"
 import {SyncSessionMailbox} from "../SyncSessionMailbox.js"
 
 export class ImapMailboxStatus {
@@ -42,6 +41,7 @@ export class ImapMailbox {
 	flags?: string[]
 	specialUse?: string
 	disabled?: boolean
+	hasParentFolder?: boolean
 	subFolders?: ImapMailbox[]
 
 	constructor(path: string) {
@@ -73,19 +73,30 @@ export class ImapMailbox {
 		return this
 	}
 
+	setHasParentFolder(hasParentFolder: boolean): this {
+		this.hasParentFolder = hasParentFolder
+		return this
+	}
+
 	setSubFolders(subFolders: ImapMailbox[]): this {
 		this.subFolders = subFolders
 		return this
 	}
 
-	static fromImapFlowListTreeResponse(listTreeResponse: ListTreeResponse): ImapMailbox {
-		return new ImapMailbox(listTreeResponse.path)
+	static fromImapFlowListTreeResponse(listTreeResponse: ListTreeResponse, hasParentFolder: boolean): ImapMailbox {
+		let imapMailbox = new ImapMailbox(listTreeResponse.path)
 			.setName(listTreeResponse.name)
 			.setPathDelimiter(listTreeResponse.delimiter)
 			.setFlags(listTreeResponse.flags)
 			.setSpecialUse(listTreeResponse.specialUse)
 			.setDisabled(listTreeResponse.disabled)
-			.setSubFolders(listTreeResponse.folders.map(value => ImapMailbox.fromImapFlowListTreeResponse(value)))
+			.setHasParentFolder(hasParentFolder)
+
+		if (listTreeResponse.folders) {
+			imapMailbox.setSubFolders(listTreeResponse.folders.map((value: ListTreeResponse) => ImapMailbox.fromImapFlowListTreeResponse(value, true)))
+		}
+
+		return imapMailbox
 	}
 
 	static fromSyncSessionMailbox(syncSessionMailbox: SyncSessionMailbox): ImapMailbox {

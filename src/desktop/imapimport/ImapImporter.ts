@@ -1,16 +1,19 @@
 import {ImapAdSync} from "./adsync/ImapAdSync.js";
 import {ImapImportState, ImportState} from "./ImapImportState.js";
-import {AdSyncEventListener} from "./adsync/AdSyncEventListener.js"
+import {AdSyncEventListener, AdSyncEventType} from "./adsync/AdSyncEventListener.js"
 import {ImapMailbox, ImapMailboxStatus} from "./adsync/imapmail/ImapMailbox.js"
 import {ImapMail} from "./adsync/imapmail/ImapMail.js"
 import {ImapError} from "./adsync/imapmail/ImapError.js"
 import {SyncSessionState} from "./adsync/ImapSyncSession.js"
+
+var fs = require('fs');
 
 export class ImapImporter implements AdSyncEventListener {
 
 	private imapAdSync: ImapAdSync | null = null
 	private imapImportState: ImapImportState = new ImapImportState(ImportState.PAUSED, new Date(Date.now()))
 	private testCounter = 0
+	private testDownloadTime: Date = new Date()
 
 	constructor(
 		//private readonly importMailFacade: ImportMailFacade,
@@ -22,6 +25,7 @@ export class ImapImporter implements AdSyncEventListener {
 
 	async continueImport(): Promise<ImportState> {
 		let syncSessionState = await this.imapAdSync?.startAdSync(this)
+		this.testDownloadTime.setTime(Date.now())
 		return this.getImportStateFromSyncSessionState(syncSessionState)
 	}
 
@@ -44,14 +48,32 @@ export class ImapImporter implements AdSyncEventListener {
 		}
 	}
 
-	onMailbox(mailbox: ImapMailbox): void {
-
+	onMailbox(mailbox: ImapMailbox, eventType: AdSyncEventType): void {
+		console.log("onMailbox")
+		//console.log(mailbox)
 	}
 
-	onMail(mail: ImapMail): void {
-		console.log("onMail " + mail)
+	onMailboxStatus(mailboxStatus: ImapMailboxStatus): void {
+		console.log("onMailboxStatus")
+		console.log(mailboxStatus)
+	}
+
+	onMail(mail: ImapMail, eventType: AdSyncEventType): void {
+		console.log("onMail")
+		//console.log(mail)
 		this.testCounter += 1
 		console.log(this.testCounter)
+
+		//TODO messageId is empty!
+		if (mail.envelope?.subject) {
+			let mailFileName = mail.envelope?.subject
+
+			// @ts-ignore
+			fs.writeFile("/home/jhm/Test/" + mailFileName + ".txt", mailFileName, function (err: any) {
+				if (err) throw err;
+				console.log('Saved!');
+			});
+		}
 	}
 
 	onPostpone(postponedUntil: Date): void {
@@ -60,21 +82,12 @@ export class ImapImporter implements AdSyncEventListener {
 
 	onFinish(): void {
 		console.log("onFinish")
+		console.log("Took (ms): " + (Date.now() - this.testDownloadTime.getTime()))
 	}
 
 	onError(error: ImapError): void {
 		console.log("onError " + error)
+		console.log(error)
 	}
 
-	onMailUpdate(updatedMail: ImapMail): void {
-		console.log("onMailUpdate " + updatedMail)
-	}
-
-	onMailboxUpdate(updatedMailbox: ImapMailbox): void {
-		console.log("onMailboxUpdate " + updatedMailbox)
-	}
-
-	onMailboxStatusUpdate(updatedMailboxStatus: ImapMailboxStatus): void{
-
-	}
 }

@@ -10,6 +10,7 @@ const SPECIAL_USE_ALL_FLAG = "\\All"
 const SPECIAL_USE_FLAGGED_FLAG = "\\FLAGGED"
 
 const NORMALIZATION_COEFFICIENT = 5
+const AVERAGE_MAIL_SIZE = 12.5
 
 export enum SyncSessionMailboxImportance {
 	NO_SYNC = 0,
@@ -21,12 +22,10 @@ export enum SyncSessionMailboxImportance {
 export class SyncSessionMailbox {
 	mailboxState: MailboxState
 	private _specialUse: string = ""
-	private size: number = 0
-	private mailCount: number = 0
-	private _averageMailSize: number = 0
+	mailCount: number | null = 0
 	timeToLiveInterval: number = 60 // in seconds
 	private importance: SyncSessionMailboxImportance = SyncSessionMailboxImportance.MEDIUM
-	private _currentThroughput: number = 0.000001
+	private _currentThroughput: number = 0.1
 	private efficiencyScoreTTLIntervalSum: number = 0
 	private _efficiencyScoreTTLIntervalHistory: number[] = []
 	private lastEfficiencyScoreUpdate: number = Date.now()
@@ -39,11 +38,9 @@ export class SyncSessionMailbox {
 		this.mailboxState = mailboxState
 	}
 
-	initSessionMailbox(size: number, mailCount: number, specialUse: string): void {
-		this.size = size
-		this.mailCount = mailCount
-		this.specialUse = specialUse
-		this._averageMailSize = size / mailCount
+	initSessionMailbox(mailCount?: number): void {
+		this.mailCount = mailCount ? mailCount : null
+		this.timeToLiveInterval = AVERAGE_MAIL_SIZE / (1 / this.efficiencyScore) * 30
 	}
 
 	get specialUse(): string {
@@ -69,12 +66,6 @@ export class SyncSessionMailbox {
 				this.importance = SyncSessionMailboxImportance.MEDIUM
 				break
 		}
-	}
-
-	set averageMailSize(value: number) {
-		this._averageMailSize = value
-		this.timeToLiveInterval = this._averageMailSize / (1 / this.efficiencyScore)
-
 	}
 
 	set currentThroughput(value: number) {
@@ -108,7 +99,6 @@ export class SyncSessionMailbox {
 				acc += value
 				return acc
 			}) / NORMALIZATION_COEFFICIENT)
-
 		}
 	}
 

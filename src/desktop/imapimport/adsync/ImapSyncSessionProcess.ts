@@ -3,11 +3,11 @@ import {AdSyncEventListener, AdSyncEventType} from "./AdSyncEventListener.js"
 import {ImapAccount} from "./ImapSyncState.js"
 import {ImapMail} from "./imapmail/ImapMail.js"
 // @ts-ignore // TODO define types
-import {FetchMessageObject} from "imapflow"
 import {AdSyncDownloadBlockSizeOptimizer} from "./optimizer/AdSyncDownloadBlockSizeOptimizer.js"
 import {AdSyncEfficiencyScoreOptimizerEventListener} from "./optimizer/AdSyncEfficiencyScoreOptimizer.js"
 import {ImapError} from "./imapmail/ImapError.js"
 import {ImapMailboxStatus} from "./imapmail/ImapMailbox.js"
+import {FetchUidRange} from "./utils/FetchUidRange.js"
 
 const {ImapFlow} = require('imapflow');
 
@@ -15,38 +15,6 @@ export enum SyncSessionProcessState {
 	STOPPED,
 	RUNNING,
 	CONNECTION_FAILED,
-}
-
-class FetchUidRange {
-	fromUid?: number
-	toUid?: number
-	private fromSeq: number = 1
-	private toSeq?: number
-	private imapClient: typeof ImapFlow
-
-	constructor(imapClient: typeof ImapFlow) {
-		this.imapClient = imapClient
-	}
-
-	async initFetchUidRange(initialFrom: number, initialDownloadBlockSize: number, isUid: boolean) {
-		await this.updateFetchUidRange(initialFrom, initialDownloadBlockSize, isUid)
-	}
-
-	async continueFetchUidRange(downloadBlockSize: number) {
-		await this.updateFetchUidRange(this.toSeq ? this.toSeq + 1 : 1, downloadBlockSize, false)
-	}
-
-	private async updateFetchUidRange(from: number, downloadBlockSize: number, isUid: boolean) {
-		let fetchFromSeqMail = await this.imapClient.fetchOne(`${from}`, {seq: true, uid: true}, {uid: isUid})
-		this.fromSeq = fetchFromSeqMail.seq
-		this.fromUid = fetchFromSeqMail.uid
-
-		let fetchToSeq = fetchFromSeqMail.seq + downloadBlockSize
-
-		let fetchToSeqMail: FetchMessageObject = await this.imapClient.fetchOne(`${fetchToSeq}`, {seq: true, uid: true})
-		this.toSeq = fetchToSeqMail.seq
-		this.toUid = fetchToSeqMail.uid
-	}
 }
 
 export class ImapSyncSessionProcess {
@@ -103,6 +71,8 @@ export class ImapSyncSessionProcess {
 			.setUidValidity(imapMailboxStatus.uidValidity)
 			.setUidNext(imapMailboxStatus.uidNext)
 			.setUidHighestModSeq(imapMailboxStatus.highestModSeq)
+
+		this.adSyncOptimizer.optimizedSyncSessionMailbox.initSessionMailbox(imapMailboxStatus.messageCount)
 		adSyncEventListener.onMailboxStatus(imapMailboxStatus)
 
 		let lock = await imapClient.getMailboxLock(this.adSyncOptimizer.optimizedSyncSessionMailbox.mailboxState.path, {readonly: true})
@@ -113,7 +83,7 @@ export class ImapSyncSessionProcess {
 		}
 
 		try {
-			let fetchUidRange = new FetchUidRange(imapClient)
+			let fetchUidRange = new FetchUidRange(imapClient, this.adSyncOptimizer.optimizedSyncSessionMailbox.mailCount)
 			let lastFetchedUid = Math.max(...this.adSyncOptimizer.optimizedSyncSessionMailbox.mailboxState.importedUidToMailMap.keys())
 			let isInitialSeqFetch = !isNaN(lastFetchedUid)
 			await fetchUidRange.initFetchUidRange(isInitialSeqFetch ? 1 : lastFetchedUid, this.adSyncOptimizer.optimizedSyncSessionMailbox.normalizedDownloadBlockSize, !isInitialSeqFetch)
@@ -152,6 +122,7 @@ export class ImapSyncSessionProcess {
 					this.adSyncOptimizer.optimizedSyncSessionMailbox.currentThroughput = mail.size / mailFetchTime
 					this.adSyncEfficiencyScoreOptimizerEventListener.onMailboxUpdate(
 						this.processId,
+						status.path,
 						this.adSyncOptimizer.optimizedSyncSessionMailbox.normalizedEfficiencyScore,
 						this.adSyncOptimizer.optimizedSyncSessionMailbox.timeToLiveInterval,
 						mail.size
@@ -178,10 +149,6 @@ export class ImapSyncSessionProcess {
 	async stopSyncSessionProcess(): Promise<SyncSessionMailbox> {
 		this.state = SyncSessionProcessState.STOPPED
 		this.adSyncOptimizer.stopAdSyncOptimizer()
-		return this.adSyncOptimizer.optimizedSyncSessionMailbox
-	}
-
-	getProcessMailbox(): SyncSessionMailbox {
 		return this.adSyncOptimizer.optimizedSyncSessionMailbox
 	}
 }
