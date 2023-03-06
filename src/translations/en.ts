@@ -1612,6 +1612,8 @@ export default {
 		"you_label": "You",
 		"referralSignup_msg": "You are signing up with a personal referral link. You will get an additional free month if you subscribe for one year.",
 		"referralSignupInvalid_msg": "You have tried signing up with an invalid referral link. You can continue registering, but it will not apply.",
-		"referralSignupCampaignError_msg": "Not allowed to sign up with campaign code and referral code at the same time."
+		"referralSignupCampaignError_msg": "Not allowed to sign up with campaign code and referral code at the same time.",
+		"referralCreditPosting_label": "Referral credit",
+		"cancelledReferralCreditPosting_label": "Cancelled referral credit"
 	}
 }

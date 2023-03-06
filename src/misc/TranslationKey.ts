@@ -1599,3 +1599,5 @@ export type TranslationKeyType =
 	| "referralSignup_msg"
 	| "referralSignupInvalid_msg"
 	| "referralSignupCampaignError_msg"
+	| "referralCreditPosting_label"
+	| "cancelledReferralCreditPosting_label"
