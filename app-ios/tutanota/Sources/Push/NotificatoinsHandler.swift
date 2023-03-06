@@ -26,7 +26,9 @@ class NotificationsHandler {
           TUTSLog("Failed to fetch/process missed notification \(err)")
         }
       }
-      self.alarmManager.rescheduleAlarms()
+      DispatchQueue.global(qos: .background).async {
+        self.alarmManager.rescheduleAlarms()
+      }
     }
   }
   

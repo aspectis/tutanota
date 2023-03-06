@@ -37,7 +37,15 @@ class AppDelegate : UIResponder,
 
     let keychainManager = KeychainManager(keyGenerator: KeyGenerator())
 
-    self.alarmManager = AlarmManager(keychainManager: keychainManager, userPreference: userPreferences)
+    self.alarmManager = AlarmManager(
+      alarmPersistor: AlarmPreferencePersistor(
+        userPreferenceFacade: self.userPreferences,
+        keychainManager: keychainManager
+      ),
+      alarmCryptor: KeychainAlarmCryptor(keychainManager: keychainManager),
+      alarmScheduler: SystemAlarmScheduler(),
+      dateProvider: SystemDateProvieder()
+    )
     self.notificationsHandler = NotificationsHandler(alarmManager: self.alarmManager, userPreference: self.userPreferences)
     self.window = UIWindow(frame: UIScreen.main.bounds)
     let credentialsEncryption = IosNativeCredentialsFacade(keychainManager: keychainManager)

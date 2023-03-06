@@ -19,16 +19,25 @@ enum HttpStatusCode: Int {
 }
 
 class AlarmManager {
-  private let keychainManager: KeychainManager
-  private let userPreference: UserPreferenceFacade
+  private let alarmPersistor: AlarmPersistor
+  private let alarmCryptor: AlarmCryptor
+  private let alarmScheduler: AlarmScheduler
+  private let dateProvider: DateProvider
   
-  init(keychainManager: KeychainManager, userPreference: UserPreferenceFacade) {
-    self.keychainManager = keychainManager
-    self.userPreference = userPreference
+  init(
+    alarmPersistor: AlarmPersistor,
+    alarmCryptor: AlarmCryptor,
+    alarmScheduler: AlarmScheduler,
+    dateProvider: DateProvider
+  ) {
+    self.alarmPersistor = alarmPersistor
+    self.alarmCryptor = alarmCryptor
+    self.alarmScheduler = alarmScheduler
+    self.dateProvider = dateProvider
   }
 
   func processNewAlarms(_ alarms: Array<EncryptedAlarmNotification>) throws {
-    var savedNotifications = self.userPreference.alarms
+    var savedNotifications = self.alarmPersistor.alarms
     var resultError: Error?
     for alarmNotification in alarms {
       do {
@@ -40,54 +49,46 @@ class AlarmManager {
     }
     
     TUTSLog("Finished processing \(alarms.count) alarms")
-    self.userPreference.store(alarms: savedNotifications)
+    self.alarmPersistor.store(alarms: savedNotifications)
     if let error = resultError {
       throw error
     }
   }
 
-  
   func resetStoredState() {
     TUTSLog("Resetting stored state")
     self.unscheduleAllAlarms(userId: nil)
-    self.userPreference.clear()
-    do {
-      try keychainManager.removePushIdentifierKeys()
-    } catch {
-      TUTSLog("Faied to remove pushIdentifier keys \(error)")
-    }
+    self.alarmPersistor.clear()
   }
   
   func rescheduleAlarms() {
     TUTSLog("Re-scheduling alarms")
-    DispatchQueue.global(qos: .background).async {
-      var occurrences = [OccurrenceInfo]()
-      for notification in self.savedAlarms() {
-        do {
-          occurrences += try self.calculateOccurrencesOf(alarm: notification)
-        } catch {
-          TUTSLog("Error when re-scheduling alarm \(notification) \(error)")
-        }
+    var occurrences = [OccurrenceInfo]()
+    for notification in self.savedAlarms() {
+      do {
+        occurrences += try self.calculateOccurrencesOf(alarm: notification)
+      } catch {
+        TUTSLog("Error when re-scheduling alarm \(notification) \(error)")
       }
-      occurrences.sort(by: { $0.occurrenceTime < $1.occurrenceTime })
-
-      for occurrence in occurrences.prefix(SYSTEM_ALARM_LIMIT).reversed() {
-        self.scheduleAlarmOccurrence(
-          occurrenceInfo: occurrence,
-          trigger: occurrence.alarm.alarmInfo.trigger,
-          summary: occurrence.alarm.summary,
-          alarmIdentifier: occurrence.alarm.alarmInfo.alarmIdentifer
-        )
-      }
+    }
+    occurrences.sort(by: { $0.occurrenceTime < $1.occurrenceTime })
+    
+    for occurrence in occurrences.prefix(SYSTEM_ALARM_LIMIT).reversed() {
+      self.scheduleAlarmOccurrence(
+        occurrenceInfo: occurrence,
+        trigger: occurrence.alarm.alarmInfo.trigger,
+        summary: occurrence.alarm.summary,
+        alarmIdentifier: occurrence.alarm.alarmInfo.alarmIdentifer
+      )
     }
   }
   
   private func savedAlarms() -> Set<EncryptedAlarmNotification> {
-    let savedNotifications = self.userPreference.alarms
+    let savedNotifications = self.alarmPersistor.alarms
     let set = Set(savedNotifications)
     if set.count != savedNotifications.count {
       TUTSLog("Duplicated alarms detected, re-saving...")
-      self.userPreference.store(alarms: Array(set))
+      self.alarmPersistor.store(alarms: Array(set))
     }
     return set
   }
@@ -119,7 +120,7 @@ class AlarmManager {
   }
   
   func unscheduleAllAlarms(userId: String?) {
-    let alarms = self.userPreference.alarms
+    let alarms = self.alarmPersistor.alarms
     for alarm in alarms {
       if userId != nil && userId != alarm.user {
         continue
@@ -133,11 +134,7 @@ class AlarmManager {
   }
   
   private func calculateOccurrencesOf(alarm encAlarmNotification: EncryptedAlarmNotification) throws -> [OccurrenceInfo] {
-    let sessionKey = self.resolveSessionkey(alarmNotification: encAlarmNotification)
-    guard let sessionKey = sessionKey else {
-      throw TUTErrorFactory.createError("Cannot resolve session key")
-    }
-    let alarmNotification = try AlarmNotification(encrypted: encAlarmNotification, sessionKey: sessionKey)
+    let alarmNotification = try alarmCryptor.decrypt(alarm: encAlarmNotification)
     
     if let repeatRule = alarmNotification.repeatRule {
       return try self.iterateRepeatingAlarm(alarm: alarmNotification, repeatRule: repeatRule)
@@ -149,11 +146,7 @@ class AlarmManager {
   
   private func unscheduleAlarm(_ encAlarmNotification: EncryptedAlarmNotification) throws {
     let alarmIdentifier = encAlarmNotification.alarmInfo.alarmIdentifier
-    let sessionKey = self.resolveSessionkey(alarmNotification: encAlarmNotification)
-    guard let sessionKey = sessionKey else {
-      throw TUTErrorFactory.createError("Cannot resolve session key on unschedule \(alarmIdentifier)")
-    }
-    let alarmNotification = try AlarmNotification(encrypted: encAlarmNotification, sessionKey: sessionKey)
+    let alarmNotification = try alarmCryptor.decrypt(alarm: encAlarmNotification)
     
     let occurrenceIds: [String]
     if let repeatRule = alarmNotification.repeatRule {
@@ -169,26 +162,6 @@ class AlarmManager {
     }
     TUTSLog("Cancelling alarm \(alarmIdentifier)")
     UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: occurrenceIds)
-  }
-  
-  private func resolveSessionkey(alarmNotification: EncryptedAlarmNotification) -> Key? {
-    var lastError: Error?
-    for notificationSessionKey in alarmNotification.notificationSessionKeys {
-      do {
-        let pushIdentifierSessionKey = try self.keychainManager
-          .getKey(keyId: notificationSessionKey.pushIdentifier.elementId)
-        guard let pushIdentifierSessionKey = pushIdentifierSessionKey else {
-          continue
-        }
-        let encSessionKey = Data(base64Encoded: notificationSessionKey.pushIdentifierSessionEncSessionKey)!
-        return try TUTAes128Facade.decryptKey(encSessionKey, withEncryptionKey: pushIdentifierSessionKey)
-      } catch {
-        TUTSLog("Failed to decrypt key \(notificationSessionKey.pushIdentifier.elementId) \(error)")
-        lastError = error
-      }
-    }
-    TUTSLog("Failed to resolve session key \(alarmNotification.alarmInfo.alarmIdentifier), last error: \(String(describing: lastError))")
-    return nil
   }
   
   private func iterateRepeatingAlarm(
@@ -209,7 +182,7 @@ class AlarmManager {
       .prefix(EVENTS_SCHEDULED_AHEAD)
       .map { occurrence in
         return OccurrenceInfo(occurrence: occurrence.occurrenceNumber, occurrenceTime: occurrence.occurenceDate, alarm: alarm)
-    }
+      }
   }
   
   private func scheduleAlarmOccurrence(
@@ -220,51 +193,25 @@ class AlarmManager {
   ) {
     let alarmTime = AlarmModel.alarmTime(trigger: trigger, eventTime: occurrenceInfo.occurrenceTime)
     
-    if alarmTime.timeIntervalSinceNow < 0 {
+    if alarmTime.timeIntervalSince(dateProvider.now) < 0 {
       TUTSLog("Alarm is in the past \(alarmIdentifier) \(alarmTime)")
       return
     }
     let fortNightSeconds: Double = 60 * 60 * 24 * 14
-    if alarmTime.timeIntervalSinceNow > fortNightSeconds {
+    if alarmTime.timeIntervalSince(dateProvider.now) > fortNightSeconds {
       TUTSLog("Event alarm is too far into the future \(alarmIdentifier) \(alarmTime)")
+      return
     }
     
-    let formattedTime = DateFormatter.localizedString(
-      from: occurrenceInfo.occurrenceTime,
-      dateStyle: .short,
-      timeStyle: .short
-    )
-    let notificationText = "\(formattedTime): \(summary)"
-    let cal = Calendar.current
-    let dateComponents = cal.dateComponents(
-      [.year, .month, .day, .hour, .minute],
-      from: alarmTime
-    )
-    let notificationTrigger = UNCalendarNotificationTrigger(
-      dateMatching: dateComponents,
-      repeats: false
-    )
-    let content = UNMutableNotificationContent()
-    content.title = translate("TutaoCalendarAlarmTitle", default: "Reminder")
-    content.body = notificationText
-    content.sound = UNNotificationSound.default
     
     let identifier = ocurrenceIdentifier(
       alarmIdentifier: alarmIdentifier,
       occurrence: occurrenceInfo.occurrence
     )
-    let request = UNNotificationRequest(
-      identifier: identifier,
-      content: content,
-      trigger: notificationTrigger
-    )
-    TUTSLog("Scheduling a notification \(identifier) at \(cal.date(from: dateComponents)!)")
-    UNUserNotificationCenter.current().add(request) { error in
-      if let error = error {
-        // We should make the whole funciton async and wait for it
-        TUTSLog("Failed to schedule a notification \(error)")
-      }
-    }
+    
+    let info = ScheduledAlarmInfo(alarmTime: alarmTime, occurrence: occurrenceInfo.occurrence, identifier: identifier, summary: summary, eventDate: occurrenceInfo.occurrenceTime)
+    
+    self.alarmScheduler.schedule(info: info)
   }
 }
 
