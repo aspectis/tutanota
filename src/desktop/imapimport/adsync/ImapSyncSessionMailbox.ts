@@ -9,7 +9,7 @@ const SPECIAL_USE_JUNK_FLAG = "\\Junk"
 const SPECIAL_USE_ALL_FLAG = "\\All"
 const SPECIAL_USE_FLAGGED_FLAG = "\\FLAGGED"
 
-const NORMALIZATION_COEFFICIENT = 5
+const NORMALIZATION_COEFFICIENT = 50
 const AVERAGE_MAIL_SIZE = 12.5
 
 export enum SyncSessionMailboxImportance {
@@ -19,7 +19,7 @@ export enum SyncSessionMailboxImportance {
 	HIGH = 3
 }
 
-export class SyncSessionMailbox {
+export class ImapSyncSessionMailbox {
 	mailboxState: MailboxState
 	private _specialUse: string = ""
 	mailCount: number | null = 0
@@ -40,7 +40,7 @@ export class SyncSessionMailbox {
 
 	initSessionMailbox(mailCount?: number): void {
 		this.mailCount = mailCount ? mailCount : null
-		this.timeToLiveInterval = AVERAGE_MAIL_SIZE / (1 / this.efficiencyScore) * 30
+		this.timeToLiveInterval = AVERAGE_MAIL_SIZE / (1 / this.efficiencyScore) * 5
 	}
 
 	get specialUse(): string {
@@ -72,7 +72,7 @@ export class SyncSessionMailbox {
 		this._currentThroughput = value
 
 		let now = Date.now()
-		if (this.lastEfficiencyScoreUpdate + this.timeToLiveInterval <= now) {
+		if (this.efficiencyScoreTTLIntervalSum != 0 && this.lastEfficiencyScoreUpdate + this.timeToLiveInterval <= now) {
 			let averageEfficiencyScoreTTLInterval = this.efficiencyScoreTTLIntervalSum / (now - this.lastEfficiencyScoreUpdate)
 			this._efficiencyScoreTTLIntervalHistory.push(averageEfficiencyScoreTTLInterval)
 			this.efficiencyScoreTTLIntervalSum = 0
@@ -117,10 +117,12 @@ export class SyncSessionMailbox {
 	set downloadBlockSize(value: number) {
 		this._downloadBlockSize = value
 
-		if (this.lastDownloadBlockSizeUpdate + this.timeToLiveInterval <= Date.now()) {
-			let averageDownloadBlockSizeTTLInterval = this.downloadBlockSizeTTLIntervalSum / this.timeToLiveInterval
+		let now = Date.now()
+		if (this.downloadBlockSizeTTLIntervalSum != 0 && this.lastDownloadBlockSizeUpdate + this.timeToLiveInterval <= now) {
+			let averageDownloadBlockSizeTTLInterval = this.downloadBlockSizeTTLIntervalSum / (now - this.lastEfficiencyScoreUpdate)
 			this._downloadBlockSizeTTLIntervalHistory.push(averageDownloadBlockSizeTTLInterval)
 			this.downloadBlockSizeTTLIntervalSum = 0
+			this.lastDownloadBlockSizeUpdate = now
 		} else {
 			this.downloadBlockSizeTTLIntervalSum += value
 		}

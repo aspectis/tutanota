@@ -59,21 +59,19 @@ export class ImapImporter implements AdSyncEventListener {
 	}
 
 	onMail(mail: ImapMail, eventType: AdSyncEventType): void {
-		console.log("onMail")
+		//console.log("onMail")
 		//console.log(mail)
 		this.testCounter += 1
-		console.log(this.testCounter)
+		//console.log(this.testCounter)
 
 		//TODO messageId is empty!
-		if (mail.envelope?.subject) {
-			let mailFileName = mail.envelope?.subject
-
-			// @ts-ignore
-			fs.writeFile("/home/jhm/Test/" + mailFileName + ".txt", mailFileName, function (err: any) {
-				if (err) throw err;
-				console.log('Saved!');
-			});
-		}
+		// if (mail.uid) {
+		// 	let mailFileName = mail.uid.toString()
+		//
+		// 	// @ts-ignore
+		// 	fs.writeFile("/home/jhm/Test/" + mailFileName + ".txt", mailFileName, function (err: any) {
+		// 	});
+		// }
 	}
 
 	onPostpone(postponedUntil: Date): void {

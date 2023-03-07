@@ -2,10 +2,10 @@ const {ImapFlow} = require('imapflow');
 
 export class FetchUidRange {
 	fromUid?: number
-	toUid?: number
+	toUid?: number | string
 	private fromSeq: number = 1
 	private toSeq?: number
-	private imapClient: typeof ImapFlow
+	private readonly imapClient: typeof ImapFlow
 	private readonly mailCount: number | null
 
 	constructor(imapClient: typeof ImapFlow, mailCount: number | null) {
@@ -14,7 +14,14 @@ export class FetchUidRange {
 	}
 
 	async initFetchUidRange(initialFrom: number, initialDownloadBlockSize: number, isUid: boolean) {
-		await this.updateFetchUidRange(initialFrom, initialDownloadBlockSize, isUid)
+		// if the mail count is null we perform a full fetch without making use of the download block size
+		if (this.mailCount == null) {
+			this.fromUid = 1
+			this.toUid = "*"
+			return
+		} else {
+			await this.updateFetchUidRange(initialFrom, initialDownloadBlockSize, isUid)
+		}
 	}
 
 	async continueFetchUidRange(downloadBlockSize: number) {
@@ -22,8 +29,10 @@ export class FetchUidRange {
 	}
 
 	private async updateFetchUidRange(from: number, downloadBlockSize: number, isUid: boolean) {
-		if (this.mailCount != null && from > this.mailCount) {
-			this.toUid = undefined // we reached the end and can stop the download // TODO optimize this
+		// if mail sequence number > mail count, we reached the end, and we can stop the download
+		if (this.mailCount == null || !isUid && from > this.mailCount) {
+			this.fromUid = undefined
+			this.toUid = undefined
 			return
 		}
 
@@ -32,7 +41,7 @@ export class FetchUidRange {
 		this.fromUid = fetchFromSeqMail.uid
 
 		let fetchToSeq = fetchFromSeqMail.seq + downloadBlockSize
-		if (this.mailCount && fetchToSeq > this.mailCount) {
+		if (fetchToSeq > this.mailCount) {
 			fetchToSeq = this.mailCount
 		}
 

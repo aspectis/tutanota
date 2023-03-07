@@ -1,4 +1,4 @@
-import {SyncSessionMailbox} from "../SyncSessionMailbox.js"
+import {ImapSyncSessionMailbox} from "../ImapSyncSessionMailbox.js"
 
 export class ImapMailboxStatus {
 	path: string
@@ -99,7 +99,7 @@ export class ImapMailbox {
 		return imapMailbox
 	}
 
-	static fromSyncSessionMailbox(syncSessionMailbox: SyncSessionMailbox): ImapMailbox {
+	static fromSyncSessionMailbox(syncSessionMailbox: ImapSyncSessionMailbox): ImapMailbox {
 		return new ImapMailbox(syncSessionMailbox.mailboxState.path)
 	}
 }
