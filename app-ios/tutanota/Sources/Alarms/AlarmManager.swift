@@ -1,39 +1,23 @@
 import Foundation
 
-// iOS (13.3 at least) has a limit on saved alarms which empirically inferred to be.
-// It means that only *last* 64 alarms are stored in the internal plist by SpringBoard.
+// iOS (13.3 at least) has a limit on saved alarms which was empirically inferred.
+// It means that only *last* X alarms are stored in the internal plist by SpringBoard.
 // If we schedule too many some alarms will not be fired. We should be careful to not
 // schedule too far into the future.
-//
-// Better approach would be to calculate occurences from all alarms, sort them and take
-// the first 64. Or schedule later ones first so that newer ones have higher priority.
-private let EVENTS_SCHEDULED_AHEAD = 14
-private let SYSTEM_ALARM_LIMIT = 64
-
-enum HttpStatusCode: Int {
-  case ok = 200
-  case notAuthenticated = 401
-  case notFound = 404
-  case tooManyRequests = 429
-  case serviceUnavailable = 503
-}
+let EVENTS_SCHEDULED_AHEAD = 14
+let SYSTEM_ALARM_LIMIT = 64
 
 class AlarmManager {
   private let alarmPersistor: AlarmPersistor
   private let alarmCryptor: AlarmCryptor
   private let alarmScheduler: AlarmScheduler
-  private let dateProvider: DateProvider
+  private let alarmModel: AlarmModel
   
-  init(
-    alarmPersistor: AlarmPersistor,
-    alarmCryptor: AlarmCryptor,
-    alarmScheduler: AlarmScheduler,
-    dateProvider: DateProvider
-  ) {
+  init(alarmPersistor: AlarmPersistor, alarmCryptor: AlarmCryptor, alarmScheduler: AlarmScheduler, alarmModel: AlarmModel) {
     self.alarmPersistor = alarmPersistor
     self.alarmCryptor = alarmCryptor
     self.alarmScheduler = alarmScheduler
-    self.dateProvider = dateProvider
+    self.alarmModel = alarmModel
   }
 
   func processNewAlarms(_ alarms: Array<EncryptedAlarmNotification>) throws {
@@ -50,6 +34,9 @@ class AlarmManager {
     
     TUTSLog("Finished processing \(alarms.count) alarms")
     self.alarmPersistor.store(alarms: savedNotifications)
+    
+    self.rescheduleAlarms()
+    TUTSLog("Finished re-scheduling")
     if let error = resultError {
       throw error
     }
@@ -63,17 +50,18 @@ class AlarmManager {
   
   func rescheduleAlarms() {
     TUTSLog("Re-scheduling alarms")
-    var occurrences = [OccurrenceInfo]()
-    for notification in self.savedAlarms() {
-      do {
-        occurrences += try self.calculateOccurrencesOf(alarm: notification)
-      } catch {
-        TUTSLog("Error when re-scheduling alarm \(notification) \(error)")
+    let decryptedAlarms = self.savedAlarms()
+      .compactMap { encryptedAlarm in
+        do {
+          return try alarmCryptor.decrypt(alarm: encryptedAlarm)
+        } catch {
+          TUTSLog("Error when decrypting alarm \(encryptedAlarm) \(error)")
+          return nil
+        }
       }
-    }
-    occurrences.sort(by: { $0.occurrenceTime < $1.occurrenceTime })
+    let occurences = alarmModel.plan(alarms: decryptedAlarms)
     
-    for occurrence in occurrences.prefix(SYSTEM_ALARM_LIMIT).reversed() {
+    for occurrence in occurences.reversed() {
       self.scheduleAlarmOccurrence(
         occurrenceInfo: occurrence,
         trigger: occurrence.alarm.alarmInfo.trigger,
@@ -102,7 +90,6 @@ class AlarmManager {
       if !existingAlarms.contains(alarm) {
         existingAlarms.append(alarm)
       }
-      // FIXME reschedule afterwards
     case .Delete:
       let alarmToUnschedule = existingAlarms.first { $0 == alarm } ?? alarm
       do {
@@ -133,94 +120,38 @@ class AlarmManager {
     }
   }
   
-  private func calculateOccurrencesOf(alarm encAlarmNotification: EncryptedAlarmNotification) throws -> [OccurrenceInfo] {
-    let alarmNotification = try alarmCryptor.decrypt(alarm: encAlarmNotification)
-    
-    if let repeatRule = alarmNotification.repeatRule {
-      return try self.iterateRepeatingAlarm(alarm: alarmNotification, repeatRule: repeatRule)
-    } else {
-      let singleOcurrence = OccurrenceInfo(occurrence: 0, occurrenceTime: alarmNotification.eventStart, alarm: alarmNotification)
-      return [singleOcurrence]
-    }
-  }
-  
   private func unscheduleAlarm(_ encAlarmNotification: EncryptedAlarmNotification) throws {
     let alarmIdentifier = encAlarmNotification.alarmInfo.alarmIdentifier
     let alarmNotification = try alarmCryptor.decrypt(alarm: encAlarmNotification)
     
-    let occurrenceIds: [String]
-    if let repeatRule = alarmNotification.repeatRule {
-      let ocurrences = try self.iterateRepeatingAlarm(
-        alarm: alarmNotification,
-        repeatRule: repeatRule
-      )
-      occurrenceIds = ocurrences.map { o in
-        ocurrenceIdentifier(alarmIdentifier: alarmIdentifier, occurrence: o.occurrence)
+    let occurrenceIds = alarmModel.futureOccurrencesOf(alarm: alarmNotification)
+      .map {
+        ocurrenceIdentifier(alarmIdentifier: $0.alarm.identifier, occurrence: $0.occurrenceNumber)
       }
-    } else {
-      occurrenceIds = [ocurrenceIdentifier(alarmIdentifier: alarmIdentifier, occurrence: 0)]
-    }
     TUTSLog("Cancelling alarm \(alarmIdentifier)")
     UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: occurrenceIds)
   }
   
-  private func iterateRepeatingAlarm(
-    alarm: AlarmNotification,
-    repeatRule: RepeatRule
-  ) throws -> [OccurrenceInfo] {
-    let now = Date()
-    let occurencesAfterNow = AlarmModel.iterateRepeatingAlarm(
-      eventStart: alarm.eventStart,
-      eventEnd: alarm.eventEnd,
-      repeatRule: repeatRule,
-      localTimeZone: TimeZone.current
-    )
-      .lazy
-      .filter { $0.occurenceDate > now }
-
-    return occurencesAfterNow
-      .prefix(EVENTS_SCHEDULED_AHEAD)
-      .map { occurrence in
-        return OccurrenceInfo(occurrence: occurrence.occurrenceNumber, occurrenceTime: occurrence.occurenceDate, alarm: alarm)
-      }
-  }
-  
   private func scheduleAlarmOccurrence(
-    occurrenceInfo: OccurrenceInfo,
+    occurrenceInfo: AlarmOccurence,
     trigger: String,
     summary: String,
     alarmIdentifier: String
   ) {
-    let alarmTime = AlarmModel.alarmTime(trigger: trigger, eventTime: occurrenceInfo.occurrenceTime)
-    
-    if alarmTime.timeIntervalSince(dateProvider.now) < 0 {
-      TUTSLog("Alarm is in the past \(alarmIdentifier) \(alarmTime)")
-      return
-    }
-    let fortNightSeconds: Double = 60 * 60 * 24 * 14
-    if alarmTime.timeIntervalSince(dateProvider.now) > fortNightSeconds {
-      TUTSLog("Event alarm is too far into the future \(alarmIdentifier) \(alarmTime)")
-      return
-    }
-    
+    let alarmTime = AlarmModel.alarmTime(trigger: trigger, eventTime: occurrenceInfo.eventOccurrenceTime)
     
     let identifier = ocurrenceIdentifier(
       alarmIdentifier: alarmIdentifier,
-      occurrence: occurrenceInfo.occurrence
+      occurrence: occurrenceInfo.occurrenceNumber
     )
     
-    let info = ScheduledAlarmInfo(alarmTime: alarmTime, occurrence: occurrenceInfo.occurrence, identifier: identifier, summary: summary, eventDate: occurrenceInfo.occurrenceTime)
+    let info = ScheduledAlarmInfo(alarmTime: alarmTime, occurrence: occurrenceInfo.occurrenceNumber, identifier: identifier, summary: summary, eventDate: occurrenceInfo.eventOccurrenceTime)
     
     self.alarmScheduler.schedule(info: info)
   }
 }
 
-fileprivate struct OccurrenceInfo {
-  let occurrence: Int
-  let occurrenceTime: Date
-  let alarm: AlarmNotification
-}
-
-fileprivate func ocurrenceIdentifier(alarmIdentifier: String, occurrence: Int) -> String {
+// visible for testing
+func ocurrenceIdentifier(alarmIdentifier: String, occurrence: Int) -> String {
   return "\(alarmIdentifier)#\(occurrence)"
 }

@@ -37,6 +37,11 @@ class AppDelegate : UIResponder,
 
     let keychainManager = KeychainManager(keyGenerator: KeyGenerator())
 
+    let alarmModel = AlarmModel(
+      perAlarmLimit: EVENTS_SCHEDULED_AHEAD,
+      overallAlarmLimit: SYSTEM_ALARM_LIMIT,
+      dateProvider: SystemDateProvider()
+    )
     self.alarmManager = AlarmManager(
       alarmPersistor: AlarmPreferencePersistor(
         userPreferenceFacade: self.userPreferences,
@@ -44,7 +49,7 @@ class AppDelegate : UIResponder,
       ),
       alarmCryptor: KeychainAlarmCryptor(keychainManager: keychainManager),
       alarmScheduler: SystemAlarmScheduler(),
-      dateProvider: SystemDateProvieder()
+      alarmModel: alarmModel
     )
     self.notificationsHandler = NotificationsHandler(alarmManager: self.alarmManager, userPreference: self.userPreferences)
     self.window = UIWindow(frame: UIScreen.main.bounds)

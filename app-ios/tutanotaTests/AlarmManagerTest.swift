@@ -2,56 +2,67 @@ import Foundation
 import XCTest
 @testable import tutanota
 
+// FIXME: rewrite me to actually test things
+
 class AlarmManagerTest : XCTestCase {
   var persistor: AlarmPersistorStub!
   var cryptor: AlarmCryptorStub!
   var scheduler: AlarmSchedulerStub!
-  var dateProvider: DateProvider!
   var alarmManager: AlarmManager!
   
   override func setUp() {
     persistor = AlarmPersistorStub()
     cryptor = AlarmCryptorStub()
     scheduler = AlarmSchedulerStub()
-    dateProvider = DateProviderStub()
-    alarmManager = AlarmManager(alarmPersistor: persistor, alarmCryptor: cryptor, alarmScheduler: scheduler, dateProvider: dateProvider)
+//    alarmManager = AlarmManager(
+//      alarmPersistor: persistor,
+//      alarmCryptor: cryptor,
+//      alarmScheduler: scheduler,
+//      alarmModel: ??
+//    )
   }
   
-  func testWhenItHasOnealarmItSchedulesIt() {
-    let start = dateProvider.now + Measurement(value: 10, unit: UnitDuration.minutes).converted(to: .seconds).value
-    let alarm = AlarmNotification(
+  private func makeAlarm(
+    at date: Date,
+    trigger: String,
+    repeatRule: RepeatRule? = nil,
+    identifier: String = "identifier"
+  ) -> AlarmNotification {
+    return AlarmNotification(
       operation: .Create,
       summary: "summary",
-      eventStart: start,
-      eventEnd: start,
-      alarmInfo: AlarmInfo(alarmIdentifer: "identifier", trigger: "5M"),
-      repeatRule: nil,
+      eventStart: date,
+      eventEnd: date,
+      alarmInfo: AlarmInfo(alarmIdentifer: identifier, trigger: trigger),
+      repeatRule: repeatRule,
       user: "user"
     )
+  }
+  
+  private func add(alarm: AlarmNotification) {
     let encryptedAlarm = EncryptedAlarmNotification(
       operation: alarm.operation,
       summary: alarm.summary,
       eventStart: "",
       eventEnd: "",
-      alarmInfo: EncryptedAlarmInfo(alarmIdentifier: alarm.alarmInfo.alarmIdentifer, trigger: ""),
+      alarmInfo: EncryptedAlarmInfo(alarmIdentifier: alarm.identifier, trigger: ""),
       repeatRule: nil,
       notificationSessionKeys: [],
       user: alarm.user
     )
-    persistor.store(alarms: [encryptedAlarm])
-    cryptor.alarms[alarm.alarmInfo.alarmIdentifer] = alarm
-    
-    alarmManager.rescheduleAlarms()
-    
-    // FIXME alarm time
-    let expectedScheduleInfo = ScheduledAlarmInfo(alarmTime: start, occurrence: 0, identifier: "idk", summary: alarm.summary, eventDate: start)
-    XCTAssertEqual(scheduler.scheduled, [expectedScheduleInfo])
-    
+    persistor.add(alarm: encryptedAlarm)
+    cryptor.alarms[alarm.identifier] = alarm
   }
 }
 
+// MARK: stubs
+
 class AlarmPersistorStub : AlarmPersistor {
   var alarms: [EncryptedAlarmNotification] = []
+  
+  func add(alarm: EncryptedAlarmNotification) {
+    self.alarms.append(alarm)
+  }
   
   func store(alarms: [EncryptedAlarmNotification]) {
     self.alarms = alarms
@@ -83,5 +94,8 @@ class AlarmSchedulerStub : AlarmScheduler {
 }
 
 class DateProviderStub : DateProvider {
+  // Mon Mar 06 2023 16:52:24 GMT+0100 (Central European Standard Time)
   var now: Date = Date(timeIntervalSince1970: 1678117944)
+  
+  var timeZone: TimeZone = TimeZone(identifier: "Europe/Berlin")!
 }

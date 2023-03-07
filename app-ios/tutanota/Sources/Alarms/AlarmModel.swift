@@ -1,11 +1,21 @@
 import Foundation
 
-struct AlarmOccurrence {
+struct EventOccurrence {
   let occurrenceNumber: Int
   let occurenceDate: Date
 }
 
-struct LazyAlarmSequence : Sequence, IteratorProtocol {
+struct AlarmOccurence : Equatable {
+  let occurrenceNumber: Int
+  let eventOccurrenceTime: Date
+  let alarm: AlarmNotification
+  
+  func alarmOccurenceTime() -> Date {
+    return AlarmModel.alarmTime(trigger: alarm.alarmInfo.trigger, eventTime: eventOccurrenceTime)
+  }
+}
+
+struct LazyEventSequence : Sequence, IteratorProtocol {
   let calcEventStart: Date
   let endDate: Date?
   let repeatRule: RepeatRule
@@ -14,7 +24,7 @@ struct LazyAlarmSequence : Sequence, IteratorProtocol {
   
   fileprivate var ocurrenceNumber = 0
   
-  mutating func next() -> AlarmOccurrence? {
+  mutating func next() -> EventOccurrence? {
     if case let .count(n) = repeatRule.endCondition, ocurrenceNumber >= n {
       return nil
     }
@@ -26,19 +36,93 @@ struct LazyAlarmSequence : Sequence, IteratorProtocol {
     if let endDate = endDate, occurrenceDate >= endDate  {
       return nil
     } else {
+      let occurrence = EventOccurrence(
+        occurrenceNumber: ocurrenceNumber,
+        occurenceDate: occurrenceDate
+      )
       ocurrenceNumber += 1
-      return AlarmOccurrence(occurrenceNumber: ocurrenceNumber, occurenceDate: occurrenceDate)
+      return occurrence
     }
   }
 }
 
 class AlarmModel {
-  static func iterateRepeatingAlarm(
+  private let perAlarmLimit: Int
+  private let overallAlarmLimit: Int
+  private let dateProvider: DateProvider
+  
+  init(perAlarmLimit: Int, overallAlarmLimit: Int, dateProvider: DateProvider) {
+    self.perAlarmLimit = perAlarmLimit
+    self.overallAlarmLimit = overallAlarmLimit
+    self.dateProvider = dateProvider
+  }
+  
+  func plan(alarms: [AlarmNotification]) -> some BidirectionalCollection<AlarmOccurence> {
+    var occurrences = [AlarmOccurence]()
+    
+    for alarm in alarms {
+      occurrences += self.futureOccurrencesOf(alarm: alarm)
+    }
+    
+    occurrences.sort(by: { $0.eventOccurrenceTime < $1.eventOccurrenceTime })
+    return occurrences.prefix(overallAlarmLimit)
+  }
+  
+  func futureOccurrencesOf(alarm: AlarmNotification) -> any Sequence<AlarmOccurence> {
+    if let repeatRule = alarm.repeatRule {
+      return self.futureOccurencesOf(alarm: alarm, withRepeatRule: repeatRule)
+    } else {
+      let singleOcurrence = AlarmOccurence(
+        occurrenceNumber: 0,
+        eventOccurrenceTime: alarm.eventStart,
+        alarm: alarm
+      )
+      if shouldScheduleAlarmAt(ocurrenceTime: singleOcurrence.alarmOccurenceTime()) {
+        return [singleOcurrence]
+      } else {
+        return []
+      }
+    }
+  }
+  
+  private func futureOccurencesOf(
+    alarm: AlarmNotification,
+    withRepeatRule: RepeatRule
+  ) -> some Sequence<AlarmOccurence> {
+    let occurencesAfterNow = occurencesOfRepeatingEvent(
+      eventStart: alarm.eventStart,
+      eventEnd: alarm.eventEnd,
+      repeatRule: withRepeatRule,
+      localTimeZone: TimeZone.current
+    )
+      .lazy
+      .filter { self.shouldScheduleAlarmAt(ocurrenceTime: $0.occurenceDate) }
+      .map { occurrence in
+        return AlarmOccurence(
+          occurrenceNumber: occurrence.occurrenceNumber,
+          eventOccurrenceTime: occurrence.occurenceDate,
+          alarm: alarm
+        )
+      }
+      .filter { self.shouldScheduleAlarmAt(ocurrenceTime: $0.alarmOccurenceTime()) }
+
+    return occurencesAfterNow
+      .prefix(perAlarmLimit)
+  }
+  
+  private func shouldScheduleAlarmAt(ocurrenceTime: Date) -> Bool {
+    let now = dateProvider.now
+    let fortNightSeconds: Double = 60 * 60 * 24 * 14
+    
+    return ocurrenceTime > now && ocurrenceTime.timeIntervalSince(now) < fortNightSeconds
+  }
+  
+  private func occurencesOfRepeatingEvent(
     eventStart: Date,
     eventEnd: Date,
     repeatRule: RepeatRule,
     localTimeZone: TimeZone
-  ) -> LazyAlarmSequence {
+  ) -> LazyEventSequence {
     var cal = Calendar.current
     let calendarUnit = calendarUnit(for: repeatRule.frequency)
     
@@ -58,7 +142,7 @@ class AlarmModel {
     
     cal.timeZone = isAllDayEvent ? localTimeZone : TimeZone(identifier: repeatRule.timeZone) ?? localTimeZone
     
-    return LazyAlarmSequence(calcEventStart: calcEventStart, endDate: endDate, repeatRule: repeatRule, cal: cal, calendarComponent: calendarUnit)
+    return LazyEventSequence(calcEventStart: calcEventStart, endDate: endDate, repeatRule: repeatRule, cal: cal, calendarComponent: calendarUnit)
   }
   
   static func alarmTime(trigger: String, eventTime: Date) -> Date {

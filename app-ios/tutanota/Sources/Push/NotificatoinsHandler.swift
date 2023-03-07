@@ -144,3 +144,11 @@ fileprivate func stringToCustomId(customId: String) -> String {
     .replacingOccurrences(of: "/", with: "_")
     .replacingOccurrences(of: "=", with: "")
 }
+
+enum HttpStatusCode: Int {
+  case ok = 200
+  case notAuthenticated = 401
+  case notFound = 404
+  case tooManyRequests = 429
+  case serviceUnavailable = 503
+}
