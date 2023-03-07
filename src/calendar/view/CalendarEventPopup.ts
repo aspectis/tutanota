@@ -14,7 +14,7 @@ import { UserError } from "../../api/main/UserError"
 import { attachDropdown, DROPDOWN_MARGIN, PosRect, showDropdown } from "../../gui/base/Dropdown.js"
 import { Keys } from "../../api/common/TutanotaConstants"
 import type { HtmlSanitizer } from "../../misc/HtmlSanitizer"
-import { prepareCalendarDescription } from "../date/CalendarUtils"
+import { calendarEventHasMoreThanOneOccurrencesLeft, prepareCalendarDescription } from "../date/CalendarUtils"
 import { noOp, ofClass } from "@tutao/tutanota-utils"
 import { BootIcons } from "../../gui/base/icons/BootIcons"
 import { IconButton } from "../../gui/base/IconButton.js"
@@ -37,6 +37,7 @@ export class CalendarEventPopup implements ModalComponent {
 		htmlSanitizer: HtmlSanitizer,
 		onEditEvent: (() => unknown) | null,
 		viewModel: CalendarEventViewModel | null,
+		private readonly firstOccurrence: CalendarEvent | null,
 	) {
 		this._calendarEvent = calendarEvent
 		this._eventBubbleRect = eventBubbleRect
@@ -165,8 +166,6 @@ export class CalendarEventPopup implements ModalComponent {
 	private renderDeleteButton(): Children {
 		if (!this._isDeleteAvailable()) return null
 
-		//FIXME we should delete the whole event if only one not excluded is left and the user deletes this one
-
 		return m(
 			IconButton,
 			attachDropdown({
@@ -188,8 +187,7 @@ export class CalendarEventPopup implements ModalComponent {
 					},
 				],
 				showDropdown: () => {
-					console.log(this._calendarEvent.repeatRule)
-					if (this._calendarEvent.repeatRule != null) {
+					if (this.firstOccurrence && calendarEventHasMoreThanOneOccurrencesLeft(this.firstOccurrence)) {
 						return true
 					} else {
 						this._deleteEvent()

@@ -1,15 +1,17 @@
 import o from "ospec"
-import { parseCalendarStringData, serializeCalendar, serializeEvent, serializeRepeatRule } from "../../../src/calendar/export/CalendarImporter.js"
-import { createCalendarEvent } from "../../../src/api/entities/tutanota/TypeRefs.js"
+import {
+	parseCalendarStringData,
+	serializeCalendar,
+	serializeEvent,
+	serializeExcludedDates,
+	serializeRepeatRule,
+} from "../../../src/calendar/export/CalendarImporter.js"
+import { createCalendarEvent, createCalendarEventAttendee, createEncryptedMailAddress } from "../../../src/api/entities/tutanota/TypeRefs.js"
 import { DateTime } from "luxon"
-import { createAlarmInfo } from "../../../src/api/entities/sys/TypeRefs.js"
-import { createUserAlarmInfo } from "../../../src/api/entities/sys/TypeRefs.js"
+import { createAlarmInfo, createDateWrapper, createRepeatRule, createUserAlarmInfo } from "../../../src/api/entities/sys/TypeRefs.js"
 import { AlarmInterval, CalendarAttendeeStatus, EndType, RepeatPeriod } from "../../../src/api/common/TutanotaConstants.js"
-import { createRepeatRule } from "../../../src/api/entities/sys/TypeRefs.js"
 import { getAllDayDateUTC } from "../../../src/api/common/utils/CommonCalendarUtils.js"
 import { getAllDayDateUTCFromZone } from "../../../src/calendar/date/CalendarUtils.js"
-import { createCalendarEventAttendee } from "../../../src/api/entities/tutanota/TypeRefs.js"
-import { createEncryptedMailAddress } from "../../../src/api/entities/tutanota/TypeRefs.js"
 
 const zone = "Europe/Berlin"
 const now = new Date(1565704860630)
@@ -1044,10 +1046,12 @@ o.spec("CalendarImporterTest", function () {
 				}
 			})
 			const parsed = parseCalendarStringData(serialized, zone)
-			o(parsed).deepEquals({
-				method: "PUBLISH",
-				contents: eventsWithoutIds,
-			})
+			o(JSON.stringify(parsed)).deepEquals(
+				JSON.stringify({
+					method: "PUBLISH",
+					contents: eventsWithoutIds,
+				}),
+			)
 		})
 		o("roundtrip import -> export", function () {
 			const text = `BEGIN:VCALENDAR
@@ -1138,4 +1142,39 @@ END:VCALENDAR`
 			o(serializeRepeatRule(repeatRule, false, "Asia/Krasnoyarsk")).deepEquals(["RRULE:FREQ=MONTHLY;INTERVAL=3;UNTIL=20190919T235959Z"])
 		})
 	})
+
+	o.spec("serializeExcludedDates", function () {
+		o("no excluded dates", function () {
+			o(serializeExcludedDates([], "Europe/Berlin")).deepEquals([])
+		})
+
+		o("one excluded date", function () {
+			o(serializeExcludedDates([createDateWrapper({ date: new Date("2023-01-14T22:00:00Z") })], "Europe/Berlin")).deepEquals([
+				"EXDATE;TZID=Europe/Berlin:20230114T230000",
+			])
+		})
+
+		o("more than one excluded date", function () {
+			o(
+				serializeExcludedDates(
+					[createDateWrapper({ date: new Date("2023-01-14T22:00:00Z") }), createDateWrapper({ date: new Date("2023-01-21T22:00:00Z") })],
+					"Europe/Berlin",
+				),
+			).deepEquals(["EXDATE;TZID=Europe/Berlin:20230114T230000,20230121T230000"])
+		})
+	})
 })
+
+// const parsedDates = parseExDates([
+// 	{ name: "EXDATES", params: {}, value: "20230309T230000Z,20230302T230000Z" },
+// 	{
+// 		name: "EXDATES",
+// 		params: {},
+// 		value: "20230309T230000Z,20230114T230000Z",
+// 	},
+// ])
+// o(parsedDates).deepEquals([
+// 	createDateWrapper({ date: new Date("2023-01-14T23:00:00Z") }),
+// 	createDateWrapper({ date: new Date("2023-03-02T23:00:00Z") }),
+// 	createDateWrapper({ date: new Date("2023-03-09T23:00:00Z") }),
+// ])
