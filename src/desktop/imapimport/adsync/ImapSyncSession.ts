@@ -8,7 +8,7 @@ import {ProgrammingError} from "../../../api/common/error/ProgrammingError.js"
 import {ImapFlow} from "imapflow"
 import {ImapMailbox} from "./imapmail/ImapMailbox.js"
 
-const DOWNLOADED_QUOTA_SAFETY_THRESHOLD: number = 100 // in byte
+const DOWNLOADED_QUOTA_SAFETY_THRESHOLD: number = 50000 // in byte
 const DEFAULT_POSTPONE_TIME: number = 24 * 60 * 60 * 1000 // 1 day
 
 export enum SyncSessionState {
@@ -193,10 +193,11 @@ export class ImapSyncSession implements SyncSessionEventListener {
 	}
 
 	async onAllMailboxesFinish(): Promise<void> {
+		console.log("onAllMailboxesFinish")
 		if (this.state != SyncSessionState.FINISHED) {
 			this.state = SyncSessionState.FINISHED
 			await this.shutDownSyncSession(false)
-			this.adSyncEventListener?.onFinish()
+			this.adSyncEventListener?.onFinish(this.downloadedQuota)
 		}
 	}
 }

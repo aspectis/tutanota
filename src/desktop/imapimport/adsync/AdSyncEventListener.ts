@@ -18,7 +18,7 @@ export interface AdSyncEventListener {
 
 	onPostpone(postponedUntil: Date): void
 
-	onFinish(): void
+	onFinish(downloadedQuota: number): void
 
 	onError(error: ImapError): void
 }

@@ -1,5 +1,7 @@
 import {MailboxState} from "./ImapSyncState.js"
 
+var fs = require('fs');
+
 const SPECIAL_USE_INBOX_FLAG = "\\Inbox"
 const SPECIAL_USE_SENT_FLAG = "\\Sent"
 const SPECIAL_USE_DRAFTS_FLAG = "\\Drafts"
@@ -9,8 +11,10 @@ const SPECIAL_USE_JUNK_FLAG = "\\Junk"
 const SPECIAL_USE_ALL_FLAG = "\\All"
 const SPECIAL_USE_FLAGGED_FLAG = "\\FLAGGED"
 
-const NORMALIZATION_COEFFICIENT = 50
+// we average / normalize over the last NORMALIZATION_COEFFICIENT _efficiencyScoreTTLIntervalHistory & _downloadBlockSizeTTLIntervalHistory entries
+const NORMALIZATION_COEFFICIENT = 100
 const AVERAGE_MAIL_SIZE = 12.5
+
 
 export enum SyncSessionMailboxImportance {
 	NO_SYNC = 0,
@@ -26,13 +30,9 @@ export class ImapSyncSessionMailbox {
 	timeToLiveInterval: number = 60 // in seconds
 	private importance: SyncSessionMailboxImportance = SyncSessionMailboxImportance.MEDIUM
 	private _currentThroughput: number = 0.1
-	private efficiencyScoreTTLIntervalSum: number = 0
-	private _efficiencyScoreTTLIntervalHistory: number[] = []
-	private lastEfficiencyScoreUpdate: number = Date.now()
-	private _downloadBlockSize: number = 200
-	private downloadBlockSizeTTLIntervalSum: number = 0
-	private _downloadBlockSizeTTLIntervalHistory: number[] = []
-	private lastDownloadBlockSizeUpdate: number = Date.now()
+	private _efficiencyScoreHistory: number[] = []
+	private _downloadBlockSize: number = 400
+	private _downloadBlockSizeHistory: number[] = []
 
 	constructor(mailboxState: MailboxState) {
 		this.mailboxState = mailboxState
@@ -57,6 +57,7 @@ export class ImapSyncSessionMailbox {
 			case SPECIAL_USE_TRASH_FLAG:
 			case SPECIAL_USE_ARCHIVE_FLAG:
 			case SPECIAL_USE_ALL_FLAG:
+			case SPECIAL_USE_SENT_FLAG:
 				this.importance = SyncSessionMailboxImportance.LOW
 				break
 			case SPECIAL_USE_JUNK_FLAG:
@@ -70,65 +71,49 @@ export class ImapSyncSessionMailbox {
 
 	set currentThroughput(value: number) {
 		this._currentThroughput = value
-
-		let now = Date.now()
-		if (this.efficiencyScoreTTLIntervalSum != 0 && this.lastEfficiencyScoreUpdate + this.timeToLiveInterval <= now) {
-			let averageEfficiencyScoreTTLInterval = this.efficiencyScoreTTLIntervalSum / (now - this.lastEfficiencyScoreUpdate)
-			this._efficiencyScoreTTLIntervalHistory.push(averageEfficiencyScoreTTLInterval)
-			this.efficiencyScoreTTLIntervalSum = 0
-			this.lastEfficiencyScoreUpdate = now
-		} else {
-			this.efficiencyScoreTTLIntervalSum += value
-		}
+		this._efficiencyScoreHistory.push(this.efficiencyScore)
 	}
 
 	get efficiencyScore(): number {
 		return this.importance * this._currentThroughput
 	}
 
-	get efficiencyScoreTTLIntervalHistory(): number[] {
-		return this._efficiencyScoreTTLIntervalHistory
+	get efficiencyScoreHistory(): number[] {
+		return this._efficiencyScoreHistory
 	}
 
 	get normalizedEfficiencyScore(): number {
-		if (this.efficiencyScoreTTLIntervalHistory.length == 0) {
+		if (this.efficiencyScoreHistory.length == 0) {
 			return this.efficiencyScore
 		} else {
-			let start = this.efficiencyScoreTTLIntervalHistory.length >= NORMALIZATION_COEFFICIENT ? NORMALIZATION_COEFFICIENT : this.efficiencyScoreTTLIntervalHistory.length
-			return (this.efficiencyScoreTTLIntervalHistory.slice(-start).reduce((acc, value) => {
+			let normalizationCoefficient = this.efficiencyScoreHistory.length >= NORMALIZATION_COEFFICIENT ? NORMALIZATION_COEFFICIENT : this.efficiencyScoreHistory.length
+			return (this.efficiencyScoreHistory.slice(-normalizationCoefficient).reduce((acc, value) => {
 				acc += value
 				return acc
-			}) / NORMALIZATION_COEFFICIENT)
+			}) / normalizationCoefficient)
 		}
 	}
 
+	// TODO rethink the downloadBlockSize. Do I need to normalize?
 	get normalizedDownloadBlockSize(): number {
-		if (this.downloadBlockSizeTTLIntervalHistory.length == 0) {
+		if (this.downloadBlockSizeHistory.length == 0) {
 			return this._downloadBlockSize
 		} else {
-			let start = this.downloadBlockSizeTTLIntervalHistory.length >= NORMALIZATION_COEFFICIENT ? NORMALIZATION_COEFFICIENT : this.downloadBlockSizeTTLIntervalHistory.length
-			return (this.downloadBlockSizeTTLIntervalHistory.slice(-start).reduce((acc, value) => {
+			let normalizationCoefficient = this.downloadBlockSizeHistory.length >= NORMALIZATION_COEFFICIENT ? NORMALIZATION_COEFFICIENT : this.downloadBlockSizeHistory.length
+			let normalizedDownloadBlockSize = (this.downloadBlockSizeHistory.slice(-normalizationCoefficient).reduce((acc, value) => {
 				acc += value
 				return acc
-			}) / NORMALIZATION_COEFFICIENT)
+			}) / normalizationCoefficient)
+			return Math.trunc(normalizedDownloadBlockSize)
 		}
 	}
 
 	set downloadBlockSize(value: number) {
 		this._downloadBlockSize = value
-
-		let now = Date.now()
-		if (this.downloadBlockSizeTTLIntervalSum != 0 && this.lastDownloadBlockSizeUpdate + this.timeToLiveInterval <= now) {
-			let averageDownloadBlockSizeTTLInterval = this.downloadBlockSizeTTLIntervalSum / (now - this.lastEfficiencyScoreUpdate)
-			this._downloadBlockSizeTTLIntervalHistory.push(averageDownloadBlockSizeTTLInterval)
-			this.downloadBlockSizeTTLIntervalSum = 0
-			this.lastDownloadBlockSizeUpdate = now
-		} else {
-			this.downloadBlockSizeTTLIntervalSum += value
-		}
+		this._downloadBlockSizeHistory.push(value)
 	}
 
-	get downloadBlockSizeTTLIntervalHistory(): number[] {
-		return this._downloadBlockSizeTTLIntervalHistory
+	get downloadBlockSizeHistory(): number[] {
+		return this._downloadBlockSizeHistory
 	}
 }

@@ -123,6 +123,7 @@ export class ImapSyncSessionProcess {
 					let mailFetchEndTime = Date.now()
 					let mailFetchTime = mailFetchEndTime - mailFetchStartTime
 
+					//TODO Check why mail source is not always available
 					if (mail.source) {
 						let mailSize = mail.source.length
 						let mailDownloadTime = mailFetchTime != 0 ? mailFetchTime : 1 // we approximate the mailFetchTime to minimum 1 millisecond

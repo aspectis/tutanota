@@ -16,6 +16,8 @@ export class ImapMailRFC822Parser {
 		this.parser = new MailParser()
 	}
 
+	// TODO is everything correct here?
+
 	async parseSource(source: Buffer): Promise<ParsedImapRFC822> {
 		return new Promise<ParsedImapRFC822>((resolve, reject) => {
 			let parsedImapRFC822: ParsedImapRFC822 = {}

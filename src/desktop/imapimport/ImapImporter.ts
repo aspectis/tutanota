@@ -64,6 +64,10 @@ export class ImapImporter implements AdSyncEventListener {
 		this.testCounter += 1
 		//console.log(this.testCounter)
 
+		if (mail.attachments) {
+			console.log("has attachment!")
+		}
+
 		//TODO messageId is empty!
 		// if (mail.uid) {
 		// 	let mailFileName = mail.uid.toString()
@@ -78,8 +82,9 @@ export class ImapImporter implements AdSyncEventListener {
 		console.log("onPostpone " + postponedUntil)
 	}
 
-	onFinish(): void {
+	onFinish(downloadedQuota: number): void {
 		console.log("onFinish")
+		console.log(downloadedQuota)
 		console.log("Took (ms): " + (Date.now() - this.testDownloadTime.getTime()))
 	}
 

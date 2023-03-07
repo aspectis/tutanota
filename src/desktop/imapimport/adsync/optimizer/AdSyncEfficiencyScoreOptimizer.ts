@@ -18,7 +18,8 @@ export class OptimizerProcess {
 	}
 }
 
-const OPTIMIZATION_INTERVAL = 30 // in seconds
+const OPTIMIZATION_INTERVAL = 10 // in seconds
+const EFFICIENCY_SCORE_THRESHOLD: number = 0.1
 
 export class AdSyncEfficiencyScoreOptimizer extends AdSyncOptimizer implements AdSyncEfficiencyScoreOptimizerEventListener {
 
@@ -39,43 +40,49 @@ export class AdSyncEfficiencyScoreOptimizer extends AdSyncOptimizer implements A
 	startAdSyncOptimizer(): void {
 		this.scheduler = setInterval(this.optimize.bind(this), OPTIMIZATION_INTERVAL * 1000) // every OPTIMIZATION_INTERVAL seconds
 		this.optimize() // call once to start downloading of mails
-
-		// TODO handle IMAP server side rate limiting
 	}
 
-	// TODO implement better heuristic for checking if a process is slow
-
-	protected optimize(): void { // TODO make sure that we do not close the last running process, even though it might be slow sometimes...
+	// TODO handle IMAP server side rate limiting
+	// TODO implement improved heuristic for checking if a process is slow
+	protected optimize(): void {
 		let averageNormalizedEfficiencyScore = this.getAverageNormalizedEfficiencyScore()
 		console.log("averageNormalizedEfficiencyScore: " + averageNormalizedEfficiencyScore)
 
-		if (averageNormalizedEfficiencyScore >= this.lastAverageNormalizedEfficiencyScore) {
-			let nextMailboxesToDownload = this.nextMailboxesToDownload(this.optimizationDifference)
-
-			nextMailboxesToDownload.forEach(mailbox => {
-				if (!this.isExistRunningProcessForMailbox(mailbox)) { // we only allow one process per IMAP folder
-					this.runningProcessMap.set(this.nextProcessId, new OptimizerProcess(mailbox.mailboxState.path))
-					this.syncSessionEventListener.onStartSyncSessionProcess(this.nextProcessId, mailbox)
-					this.nextProcessId += 1
-				}
-			})
-		} else {
-			let nextProcessIdsToDrop = this.nextProcessIdsToDrop(1) // TODO Should we always decrease by one?
-
-			nextProcessIdsToDrop.forEach(processId => {
-				let mailboxToDrop = this.runningProcessMap.get(processId)
-				let timeToLiveIntervalMS = 1000 * (mailboxToDrop?.timeToLiveInterval ? mailboxToDrop.timeToLiveInterval : 0) // conversion to milliseconds
-
-				// a process may run at least its timeToLiveInterval in seconds
-				if (this.lastOptimizerUpdateTimestamp && this.lastOptimizerUpdateTimestamp + timeToLiveIntervalMS <= Date.now()) {
-					this.runningProcessMap.delete(processId)
-					this.syncSessionEventListener.onStopSyncSessionProcess(processId)
-				}
-			})
+		if (averageNormalizedEfficiencyScore + EFFICIENCY_SCORE_THRESHOLD >= this.lastAverageNormalizedEfficiencyScore) {
+			this.startSyncSessionProcesses(this.optimizationDifference)
+		} else if (this.runningProcessMap.size > 1) {
+			this.stopSyncSessionProcesses(1)
 		}
 
 		this.lastAverageNormalizedEfficiencyScore = averageNormalizedEfficiencyScore
 		this.lastOptimizerUpdateTimestamp = Date.now()
+	}
+
+	private startSyncSessionProcesses(amount: number) {
+		let nextMailboxesToDownload = this.nextMailboxesToDownload(amount)
+
+		nextMailboxesToDownload.forEach(mailbox => {
+			if (!this.isExistRunningProcessForMailbox(mailbox)) { // we only allow one process per IMAP folder
+				this.runningProcessMap.set(this.nextProcessId, new OptimizerProcess(mailbox.mailboxState.path))
+				this.syncSessionEventListener.onStartSyncSessionProcess(this.nextProcessId, mailbox)
+				this.nextProcessId += 1
+			}
+		})
+	}
+
+	private stopSyncSessionProcesses(amount: number) {
+		let nextProcessIdsToDrop = this.nextProcessIdsToDrop(amount)
+
+		nextProcessIdsToDrop.forEach(processId => {
+			let mailboxToDrop = this.runningProcessMap.get(processId)
+			let timeToLiveIntervalMS = 1000 * (mailboxToDrop?.timeToLiveInterval ? mailboxToDrop.timeToLiveInterval : 0) // conversion to milliseconds
+
+			// a process may run at least its timeToLiveInterval in seconds
+			if (this.lastOptimizerUpdateTimestamp && this.lastOptimizerUpdateTimestamp + timeToLiveIntervalMS <= Date.now()) {
+				this.runningProcessMap.delete(processId)
+				this.syncSessionEventListener.onStopSyncSessionProcess(processId)
+			}
+		})
 	}
 
 	private getAverageNormalizedEfficiencyScore(): number {
@@ -93,14 +100,14 @@ export class AdSyncEfficiencyScoreOptimizer extends AdSyncOptimizer implements A
 		}
 	}
 
-	private nextMailboxesToDownload(optimizationDifference: number): ImapSyncSessionMailbox[] {
+	private nextMailboxesToDownload(amount: number): ImapSyncSessionMailbox[] {
 		return this.optimizedMailboxes
 				   .filter(mailbox => !this.isExistRunningProcessForMailbox(mailbox)) // we only allow one process per IMAP folder
 				   .sort((a, b) => b.efficiencyScore - a.efficiencyScore)
-				   .slice(0, optimizationDifference)
+				   .slice(0, amount)
 	}
 
-	private nextProcessIdsToDrop(optimizationDifference: number): number[] {
+	private nextProcessIdsToDrop(amount: number): number[] {
 		return Array.from(this.runningProcessMap.entries())
 					.sort((a, b) => {
 						if (!b[1].normalizedEfficiencyScore || !a[1].normalizedEfficiencyScore) {
@@ -110,7 +117,7 @@ export class AdSyncEfficiencyScoreOptimizer extends AdSyncOptimizer implements A
 						}
 					})
 					.map(value => value[0])
-					.slice(0, optimizationDifference)
+					.slice(0, amount)
 	}
 
 	private isExistRunningProcessForMailbox(mailbox: ImapSyncSessionMailbox) {
@@ -138,15 +145,16 @@ export class AdSyncEfficiencyScoreOptimizer extends AdSyncOptimizer implements A
 			return mailbox.mailboxState.path == syncSessionMailbox.mailboxState.path
 		})
 		if (mailboxIndex != -1) {
+			let isLastMailboxFinish = this.optimizedMailboxes.length == 1
 			this.optimizedMailboxes.splice(mailboxIndex, 1)
-		}
 
-		// call onAllMailboxesFinish() once download of all IMAP folders is finished
-		if (this.optimizedMailboxes.length == 0) {
-			this.syncSessionEventListener.onAllMailboxesFinish()
-		} else {
-			// call optimize to start new processes
-			this.optimize() // TODO Check if we should only start one new process!
+			// call onAllMailboxesFinish() once download of all IMAP folders is finished
+			if (isLastMailboxFinish) {
+				this.syncSessionEventListener.onAllMailboxesFinish()
+			} else {
+				// start a new sync session processes in replacement for the finished one
+				this.startSyncSessionProcesses(1)
+			}
 		}
 	}
 }
