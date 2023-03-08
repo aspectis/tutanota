@@ -8,16 +8,21 @@ let EVENTS_SCHEDULED_AHEAD = 14
 let SYSTEM_ALARM_LIMIT = 64
 
 class AlarmManager {
-  private let alarmPersistor: AlarmPersistor
-  private let alarmCryptor: AlarmCryptor
-  private let alarmScheduler: AlarmScheduler
-  private let alarmModel: AlarmModel
+  private let alarmPersistor: any AlarmPersistor
+  private let alarmCryptor: any AlarmCryptor
+  private let alarmScheduler: any AlarmScheduler
+  private let alarmCalculator: any AlarmCalculator
   
-  init(alarmPersistor: AlarmPersistor, alarmCryptor: AlarmCryptor, alarmScheduler: AlarmScheduler, alarmModel: AlarmModel) {
+  init(
+    alarmPersistor: any AlarmPersistor,
+    alarmCryptor: any AlarmCryptor,
+    alarmScheduler: any AlarmScheduler,
+    alarmCalculator: any AlarmCalculator
+  ) {
     self.alarmPersistor = alarmPersistor
     self.alarmCryptor = alarmCryptor
     self.alarmScheduler = alarmScheduler
-    self.alarmModel = alarmModel
+    self.alarmCalculator = alarmCalculator
   }
 
   func processNewAlarms(_ alarms: Array<EncryptedAlarmNotification>) throws {
@@ -59,7 +64,7 @@ class AlarmManager {
           return nil
         }
       }
-    let occurences = alarmModel.plan(alarms: decryptedAlarms)
+    let occurences = alarmCalculator.futureOccurrences(acrossAlarms: decryptedAlarms, upToForEach: EVENTS_SCHEDULED_AHEAD, upToOverall: SYSTEM_ALARM_LIMIT)
     
     for occurrence in occurences.reversed() {
       self.scheduleAlarmOccurrence(
@@ -124,7 +129,7 @@ class AlarmManager {
     let alarmIdentifier = encAlarmNotification.alarmInfo.alarmIdentifier
     let alarmNotification = try alarmCryptor.decrypt(alarm: encAlarmNotification)
     
-    let occurrenceIds = alarmModel.futureOccurrencesOf(alarm: alarmNotification)
+    let occurrenceIds = alarmCalculator.futureOccurrences(ofAlarm: alarmNotification)
       .map {
         ocurrenceIdentifier(alarmIdentifier: $0.alarm.identifier, occurrence: $0.occurrenceNumber)
       }

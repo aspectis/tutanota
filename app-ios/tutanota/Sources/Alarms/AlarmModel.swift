@@ -15,62 +15,46 @@ struct AlarmOccurence : Equatable {
   }
 }
 
-struct LazyEventSequence : Sequence, IteratorProtocol {
-  let calcEventStart: Date
-  let endDate: Date?
-  let repeatRule: RepeatRule
-  let cal: Calendar
-  let calendarComponent: Calendar.Component
+/// Something that can calculate when alarms should happen
+protocol AlarmCalculator {
+  /// Calcuate the most recent alarm occurences up to the specified limits
+  /// note: return type would ideally not be required to be boxed but it's the easiest until proper upper bound inference is available at runtime
+  /// see https://forums.swift.org/t/inferred-result-type-requires-explicit-coercion/59602/2
+  /// (alternatively we could always produce arrays)
+  func futureOccurrences(acrossAlarms alarms: [AlarmNotification], upToForEach: Int, upToOverall: Int) -> any BidirectionalCollection<AlarmOccurence>
   
-  fileprivate var ocurrenceNumber = 0
-  
-  mutating func next() -> EventOccurrence? {
-    if case let .count(n) = repeatRule.endCondition, ocurrenceNumber >= n {
-      return nil
-    }
-    let occurrenceDate = cal.date(
-      byAdding: self.calendarComponent,
-      value: repeatRule.interval * ocurrenceNumber,
-      to: calcEventStart
-    )!
-    if let endDate = endDate, occurrenceDate >= endDate  {
-      return nil
-    } else {
-      let occurrence = EventOccurrence(
-        occurrenceNumber: ocurrenceNumber,
-        occurenceDate: occurrenceDate
-      )
-      ocurrenceNumber += 1
-      return occurrence
-    }
-  }
+  func futureOccurrences(ofAlarm alarm: AlarmNotification) -> any Sequence<AlarmOccurence>
 }
 
-class AlarmModel {
-  private let perAlarmLimit: Int
-  private let overallAlarmLimit: Int
+/// A helper to magically unbox any Sequence to call prefix() on it because
+/// "we cannot call a member of an existential value if the result type of that member uses any of the associated types in an invariant position."
+/// see https://forums.swift.org/t/se-0353-constrained-existential-types/56853/22
+private func prefix(_ s: some Sequence<AlarmOccurence>, _ maxLength: Int) -> any Sequence<AlarmOccurence> {
+  return s.prefix(maxLength)
+}
+
+class AlarmModel : AlarmCalculator {
   private let dateProvider: DateProvider
   
-  init(perAlarmLimit: Int, overallAlarmLimit: Int, dateProvider: DateProvider) {
-    self.perAlarmLimit = perAlarmLimit
-    self.overallAlarmLimit = overallAlarmLimit
+  init(dateProvider: DateProvider) {
     self.dateProvider = dateProvider
   }
   
-  func plan(alarms: [AlarmNotification]) -> some BidirectionalCollection<AlarmOccurence> {
+  func futureOccurrences(acrossAlarms alarms: [AlarmNotification], upToForEach: Int, upToOverall: Int) -> any BidirectionalCollection<AlarmOccurence> {
     var occurrences = [AlarmOccurence]()
     
     for alarm in alarms {
-      occurrences += self.futureOccurrencesOf(alarm: alarm)
+      let a = prefix(self.futureOccurrences(ofAlarm: alarm), upToForEach)
+      occurrences += a
     }
     
     occurrences.sort(by: { $0.eventOccurrenceTime < $1.eventOccurrenceTime })
-    return occurrences.prefix(overallAlarmLimit)
+    return occurrences.prefix(upToOverall)
   }
   
-  func futureOccurrencesOf(alarm: AlarmNotification) -> any Sequence<AlarmOccurence> {
+  func futureOccurrences(ofAlarm alarm: AlarmNotification) -> any Sequence<AlarmOccurence> {
     if let repeatRule = alarm.repeatRule {
-      return self.futureOccurencesOf(alarm: alarm, withRepeatRule: repeatRule)
+      return self.futureOccurences(ofAlarm: alarm, withRepeatRule: repeatRule)
     } else {
       let singleOcurrence = AlarmOccurence(
         occurrenceNumber: 0,
@@ -85,8 +69,8 @@ class AlarmModel {
     }
   }
   
-  private func futureOccurencesOf(
-    alarm: AlarmNotification,
+  private func futureOccurences(
+    ofAlarm alarm: AlarmNotification,
     withRepeatRule: RepeatRule
   ) -> some Sequence<AlarmOccurence> {
     let occurencesAfterNow = occurencesOfRepeatingEvent(
@@ -107,14 +91,10 @@ class AlarmModel {
       .filter { self.shouldScheduleAlarmAt(ocurrenceTime: $0.alarmOccurenceTime()) }
 
     return occurencesAfterNow
-      .prefix(perAlarmLimit)
   }
   
   private func shouldScheduleAlarmAt(ocurrenceTime: Date) -> Bool {
-    let now = dateProvider.now
-    let fortNightSeconds: Double = 60 * 60 * 24 * 14
-    
-    return ocurrenceTime > now && ocurrenceTime.timeIntervalSince(now) < fortNightSeconds
+    return ocurrenceTime > dateProvider.now
   }
   
   private func occurencesOfRepeatingEvent(
@@ -127,12 +107,12 @@ class AlarmModel {
     let calendarUnit = calendarUnit(for: repeatRule.frequency)
     
     let isAllDayEvent = isAllDayEvent(startTime: eventStart, endTime: eventEnd)
-    let calcEventStart = isAllDayEvent ? allDayDateLocal(dateUTC: eventStart) : eventStart
+    let calcEventStart = isAllDayEvent ? allDayLocalDate(fromUTCDate: eventStart) : eventStart
     let endDate: Date?
     switch repeatRule.endCondition {
     case let .untilDate(valueDate):
       if isAllDayEvent {
-        endDate = allDayDateLocal(dateUTC: valueDate)
+        endDate = allDayLocalDate(fromUTCDate: valueDate)
       } else {
         endDate = valueDate
       }
@@ -168,21 +148,54 @@ class AlarmModel {
       return cal.date(byAdding: .minute, value: -5, to: eventTime)!
     }
   }
+}
+
+struct LazyEventSequence : Sequence, IteratorProtocol {
+  let calcEventStart: Date
+  let endDate: Date?
+  let repeatRule: RepeatRule
+  let cal: Calendar
+  let calendarComponent: Calendar.Component
   
-  static func allDayDateUTC(date: Date) -> Date {
-    let calendar = Calendar.current
-    var localComponents = calendar.dateComponents([.year, .month, .day], from: date)
-    let timeZone = TimeZone(identifier: "UTC")!
-    localComponents.timeZone = timeZone
-    return calendar.date(from: localComponents)!
+  fileprivate var ocurrenceNumber = 0
+  
+  mutating func next() -> EventOccurrence? {
+    if case let .count(n) = repeatRule.endCondition, ocurrenceNumber >= n {
+      return nil
+    }
+    let occurrenceDate = cal.date(
+      byAdding: self.calendarComponent,
+      value: repeatRule.interval * ocurrenceNumber,
+      to: calcEventStart
+    )!
+    if let endDate = endDate, occurrenceDate >= endDate  {
+      return nil
+    } else {
+      let occurrence = EventOccurrence(
+        occurrenceNumber: ocurrenceNumber,
+        occurenceDate: occurrenceDate
+      )
+      ocurrenceNumber += 1
+      return occurrence
+    }
   }
 }
 
-func allDayDateLocal(dateUTC: Date) -> Date {
+
+func allDayUTCDate(fromLocalDate localDate: Date) -> Date {
+  let calendar = Calendar.current
+  var localComponents = calendar.dateComponents([.year, .month, .day], from: localDate)
+  let timeZone = TimeZone(identifier: "UTC")!
+  localComponents.timeZone = timeZone
+  return calendar.date(from: localComponents)!
+}
+
+
+func allDayLocalDate(fromUTCDate utcDate: Date) -> Date {
   var calendar = Calendar.current
   let timeZone = TimeZone(identifier: "UTC")!
   calendar.timeZone = timeZone
-  let components = calendar.dateComponents([.year, .month, .day], from: dateUTC)
+  let components = calendar.dateComponents([.year, .month, .day], from: utcDate)
   calendar.timeZone = TimeZone.current
   return calendar.date(from: components)!
 }
