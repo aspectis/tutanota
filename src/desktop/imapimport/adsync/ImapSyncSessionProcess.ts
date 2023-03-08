@@ -4,7 +4,7 @@ import {ImapAccount} from "./ImapSyncState.js"
 import {ImapMail} from "./imapmail/ImapMail.js"
 // @ts-ignore // TODO define types
 import {AdSyncDownloadBlockSizeOptimizer} from "./optimizer/AdSyncDownloadBlockSizeOptimizer.js"
-import {AdSyncEfficiencyScoreOptimizerEventListener} from "./optimizer/AdSyncEfficiencyScoreOptimizer.js"
+import {AdSyncParallelProcessesOptimizerEventListener} from "./optimizer/AdSyncParallelProcessesOptimizer.js"
 import {ImapError} from "./imapmail/ImapError.js"
 import {ImapMailboxStatus} from "./imapmail/ImapMailbox.js"
 import {FetchUidRange} from "./utils/FetchUidRange.js"
@@ -12,6 +12,8 @@ import {FetchUidRange} from "./utils/FetchUidRange.js"
 const {ImapFlow} = require('imapflow');
 
 export enum SyncSessionProcessState {
+
+	NOT_STARTED,
 	STOPPED,
 	RUNNING,
 	CONNECTION_FAILED,
@@ -19,12 +21,12 @@ export enum SyncSessionProcessState {
 
 export class ImapSyncSessionProcess {
 	processId: number
-	private adSyncEfficiencyScoreOptimizerEventListener: AdSyncEfficiencyScoreOptimizerEventListener
-	private state: SyncSessionProcessState = SyncSessionProcessState.STOPPED
+	private adSyncEfficiencyScoreOptimizerEventListener: AdSyncParallelProcessesOptimizerEventListener
+	private state: SyncSessionProcessState = SyncSessionProcessState.NOT_STARTED
 	private imapAccount: ImapAccount
 	private adSyncOptimizer: AdSyncDownloadBlockSizeOptimizer
 
-	constructor(processId: number, adSyncEfficiencyScoreOptimizerEventListener: AdSyncEfficiencyScoreOptimizerEventListener, imapAccount: ImapAccount, adSyncOptimizer: AdSyncDownloadBlockSizeOptimizer) {
+	constructor(processId: number, adSyncEfficiencyScoreOptimizerEventListener: AdSyncParallelProcessesOptimizerEventListener, imapAccount: ImapAccount, adSyncOptimizer: AdSyncDownloadBlockSizeOptimizer) {
 		this.processId = processId
 		this.adSyncEfficiencyScoreOptimizerEventListener = adSyncEfficiencyScoreOptimizerEventListener
 		this.imapAccount = imapAccount
@@ -51,8 +53,10 @@ export class ImapSyncSessionProcess {
 
 		try {
 			await imapClient.connect()
-			this.runSyncSessionProcess(imapClient, adSyncEventListener)
-			this.state = SyncSessionProcessState.RUNNING
+			if (this.state == SyncSessionProcessState.NOT_STARTED) {
+				this.runSyncSessionProcess(imapClient, adSyncEventListener)
+				this.state = SyncSessionProcessState.RUNNING
+			}
 		} catch (error) {
 			this.state = SyncSessionProcessState.CONNECTION_FAILED
 		}
@@ -96,6 +100,7 @@ export class ImapSyncSessionProcess {
 			let fetchUidRange = await this.initFetchUidRange(imapClient)
 
 			while (fetchUidRange.fromUid && fetchUidRange.toUid) {
+				this.adSyncOptimizer.optimizedSyncSessionMailbox.reportDownloadBlockSizeUsage(fetchUidRange.currentDownloadBlockSize)
 				let mailFetchStartTime = Date.now()
 				let mails = imapClient.fetch(
 					`${fetchUidRange.fromUid}:${fetchUidRange.toUid}`,
@@ -127,27 +132,32 @@ export class ImapSyncSessionProcess {
 					if (mail.source) {
 						let mailSize = mail.source.length
 						let mailDownloadTime = mailFetchTime != 0 ? mailFetchTime : 1 // we approximate the mailFetchTime to minimum 1 millisecond
-						this.adSyncOptimizer.optimizedSyncSessionMailbox.currentThroughput = mailSize / mailDownloadTime
+						let currenThroughput = mailSize / mailDownloadTime
+						this.adSyncOptimizer.optimizedSyncSessionMailbox.reportCurrentThroughput(currenThroughput)
 
 						this.adSyncEfficiencyScoreOptimizerEventListener.onDownloadUpdate(
 							this.processId,
-							this.adSyncOptimizer.optimizedSyncSessionMailbox.normalizedEfficiencyScore,
-							this.adSyncOptimizer.optimizedSyncSessionMailbox.timeToLiveInterval,
+							this.adSyncOptimizer.optimizedSyncSessionMailbox,
 							mailSize
 						)
+					} else {
+						adSyncEventListener.onError(new ImapError(mail))
 					}
 
 					let imapMail = await ImapMail.fromImapFlowFetchMessageObject(mail)
 
-					// TODO save info on downloaded mails in order to not download mails tiwce if optimizer is closing the sync session
-
 					// TODO What happens if only flags updated but IMAP server does not support QRESYNC?
 					// TODO Check if email is already downloaded before downloading the actual data
 					let isMailUpdate = this.adSyncOptimizer.optimizedSyncSessionMailbox.mailboxState.importedUidToMailMap.has(mail.uid)
-					adSyncEventListener.onMail(imapMail, isMailUpdate ? AdSyncEventType.UPDATE : AdSyncEventType.CREATE)
+					if (isMailUpdate) {
+						adSyncEventListener.onMail(imapMail, AdSyncEventType.UPDATE)
+					} else {
+						adSyncEventListener.onMail(imapMail, AdSyncEventType.CREATE)
+						this.adSyncOptimizer.optimizedSyncSessionMailbox.mailboxState.importedUidToMailMap.set(imapMail.uid, ["newId", "newId"])
+					}
 				}
 
-				await fetchUidRange.continueFetchUidRange(this.adSyncOptimizer.optimizedSyncSessionMailbox.normalizedDownloadBlockSize)
+				await fetchUidRange.continueFetchUidRange(this.adSyncOptimizer.optimizedSyncSessionMailbox.downloadBlockSize)
 			}
 		} catch (error: any) {
 			adSyncEventListener.onError(new ImapError(error))
@@ -164,7 +174,7 @@ export class ImapSyncSessionProcess {
 
 		await fetchUidRange.initFetchUidRange(
 			isInitialSeqFetch ? 1 : lastFetchedUid,
-			this.adSyncOptimizer.optimizedSyncSessionMailbox.normalizedDownloadBlockSize,
+			this.adSyncOptimizer.optimizedSyncSessionMailbox.downloadBlockSize,
 			!isInitialSeqFetch
 		)
 		return fetchUidRange

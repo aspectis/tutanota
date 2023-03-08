@@ -9,14 +9,13 @@ export interface ParsedImapRFC822 {
 	parsedAttachments?: ImapMailAttachment[]
 }
 
+// TODO perform security cleansing
 export class ImapMailRFC822Parser {
 	private parser: typeof MailParser
 
 	constructor() {
 		this.parser = new MailParser()
 	}
-
-	// TODO is everything correct here?
 
 	async parseSource(source: Buffer): Promise<ParsedImapRFC822> {
 		return new Promise<ParsedImapRFC822>((resolve, reject) => {
@@ -32,6 +31,9 @@ export class ImapMailRFC822Parser {
 				}
 
 				if (data.type == 'attachment') {
+					if (typeof parsedImapRFC822.parsedAttachments === 'undefined') {
+						parsedImapRFC822.parsedAttachments = []
+					}
 					let binary = await this.bufferFromStream(data.content)
 					let imapMailAttachment = new ImapMailAttachment(data.size, data.contentType, binary)
 					parsedImapRFC822.parsedAttachments?.push(imapMailAttachment)

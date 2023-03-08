@@ -1,6 +1,13 @@
 import {MailboxState} from "./ImapSyncState.js"
-
-var fs = require('fs');
+import {
+	AverageEfficiencyScore,
+	AverageThroughput,
+	DownloadBlockSize,
+	getAverageOfList,
+	Throughput,
+	TimeIntervalTimeStamp,
+	TimeStamp
+} from "./utils/AdSyncUtils.js"
 
 const SPECIAL_USE_INBOX_FLAG = "\\Inbox"
 const SPECIAL_USE_SENT_FLAG = "\\Sent"
@@ -11,11 +18,6 @@ const SPECIAL_USE_JUNK_FLAG = "\\Junk"
 const SPECIAL_USE_ALL_FLAG = "\\All"
 const SPECIAL_USE_FLAGGED_FLAG = "\\FLAGGED"
 
-// we average / normalize over the last NORMALIZATION_COEFFICIENT _efficiencyScoreTTLIntervalHistory & _downloadBlockSizeTTLIntervalHistory entries
-const NORMALIZATION_COEFFICIENT = 100
-const AVERAGE_MAIL_SIZE = 12.5
-
-
 export enum SyncSessionMailboxImportance {
 	NO_SYNC = 0,
 	LOW = 1,
@@ -25,14 +27,14 @@ export enum SyncSessionMailboxImportance {
 
 export class ImapSyncSessionMailbox {
 	mailboxState: MailboxState
-	private _specialUse: string = ""
 	mailCount: number | null = 0
-	timeToLiveInterval: number = 60 // in seconds
-	private importance: SyncSessionMailboxImportance = SyncSessionMailboxImportance.MEDIUM
-	private _currentThroughput: number = 0.1
-	private _efficiencyScoreHistory: number[] = []
-	private _downloadBlockSize: number = 400
-	private _downloadBlockSizeHistory: number[] = []
+	timeToLiveInterval: number = 10 // in seconds
+	downloadBlockSize = 500
+	importance: SyncSessionMailboxImportance = SyncSessionMailboxImportance.MEDIUM
+	private _specialUse: string = ""
+	private throughputHistory: Map<TimeStamp, Throughput> = new Map<TimeStamp, Throughput>()
+	private averageThroughputInTimeIntervalHistory: Map<TimeIntervalTimeStamp, AverageThroughput> = new Map<TimeIntervalTimeStamp, AverageThroughput>()
+	private downloadBlockSizeHistory: Map<TimeStamp, DownloadBlockSize> = new Map<TimeStamp, DownloadBlockSize>()
 
 	constructor(mailboxState: MailboxState) {
 		this.mailboxState = mailboxState
@@ -40,7 +42,6 @@ export class ImapSyncSessionMailbox {
 
 	initSessionMailbox(mailCount?: number): void {
 		this.mailCount = mailCount ? mailCount : null
-		this.timeToLiveInterval = AVERAGE_MAIL_SIZE / (1 / this.efficiencyScore) * 5
 	}
 
 	get specialUse(): string {
@@ -69,51 +70,47 @@ export class ImapSyncSessionMailbox {
 		}
 	}
 
-	set currentThroughput(value: number) {
-		this._currentThroughput = value
-		this._efficiencyScoreHistory.push(this.efficiencyScore)
+	getAverageThroughputInTimeInterval(fromTimeStamp: TimeStamp, toTimeStamp: TimeStamp): AverageThroughput {
+		let throughputsInTimeInterval = [...this.throughputHistory.entries()]
+			.filter(([timeStamp, _throughput]) => {
+				return timeStamp >= fromTimeStamp && timeStamp < toTimeStamp
+			})
+			.map(([_timeStamp, throughput]) => {
+				return throughput
+			})
+		let averageThroughputInTimeInterval = getAverageOfList(throughputsInTimeInterval)
+		this.averageThroughputInTimeIntervalHistory.set(`${fromTimeStamp}${toTimeStamp}`, averageThroughputInTimeInterval)
+		return averageThroughputInTimeInterval
 	}
 
-	get efficiencyScore(): number {
-		return this.importance * this._currentThroughput
+	getAverageEfficiencyScoreInTimeInterval(fromTimeStamp: TimeStamp, toTimeStamp: TimeStamp): AverageEfficiencyScore {
+		let key = `${fromTimeStamp}${toTimeStamp}`
+		let averageExists = this.averageThroughputInTimeIntervalHistory.has(key)
+		return this.importance * (averageExists ? this.averageThroughputInTimeIntervalHistory.get(key)! : this.getAverageThroughputInTimeInterval(fromTimeStamp, toTimeStamp))
 	}
 
-	get efficiencyScoreHistory(): number[] {
-		return this._efficiencyScoreHistory
-	}
-
-	get normalizedEfficiencyScore(): number {
-		if (this.efficiencyScoreHistory.length == 0) {
-			return this.efficiencyScore
+	// TODO Use this somehow?
+	getDownloadBlockSizeInTimeInterval(fromTimeStamp: TimeStamp, toTimeStamp: TimeStamp): DownloadBlockSize {
+		let downloadBlockSizeInTimeInterval = [...this.downloadBlockSizeHistory.entries()]
+			.filter(([timeStamp, _downloadBlockSize]) => {
+				return timeStamp >= fromTimeStamp && timeStamp < toTimeStamp
+			})
+			.map(([_timeStamp, downloadBlockSize]) => {
+				return downloadBlockSize
+			})
+			.at(-1)
+		if (typeof downloadBlockSizeInTimeInterval !== 'undefined') {
+			return downloadBlockSizeInTimeInterval
 		} else {
-			let normalizationCoefficient = this.efficiencyScoreHistory.length >= NORMALIZATION_COEFFICIENT ? NORMALIZATION_COEFFICIENT : this.efficiencyScoreHistory.length
-			return (this.efficiencyScoreHistory.slice(-normalizationCoefficient).reduce((acc, value) => {
-				acc += value
-				return acc
-			}) / normalizationCoefficient)
+			return this.downloadBlockSize
 		}
 	}
 
-	// TODO rethink the downloadBlockSize. Do I need to normalize?
-	get normalizedDownloadBlockSize(): number {
-		if (this.downloadBlockSizeHistory.length == 0) {
-			return this._downloadBlockSize
-		} else {
-			let normalizationCoefficient = this.downloadBlockSizeHistory.length >= NORMALIZATION_COEFFICIENT ? NORMALIZATION_COEFFICIENT : this.downloadBlockSizeHistory.length
-			let normalizedDownloadBlockSize = (this.downloadBlockSizeHistory.slice(-normalizationCoefficient).reduce((acc, value) => {
-				acc += value
-				return acc
-			}) / normalizationCoefficient)
-			return Math.trunc(normalizedDownloadBlockSize)
-		}
+	reportCurrentThroughput(throughput: Throughput) {
+		this.throughputHistory.set(Date.now(), throughput)
 	}
 
-	set downloadBlockSize(value: number) {
-		this._downloadBlockSize = value
-		this._downloadBlockSizeHistory.push(value)
-	}
-
-	get downloadBlockSizeHistory(): number[] {
-		return this._downloadBlockSizeHistory
+	reportDownloadBlockSizeUsage(downloadBlockSize: DownloadBlockSize) {
+		this.downloadBlockSizeHistory.set(Date.now(), downloadBlockSize)
 	}
 }

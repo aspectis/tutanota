@@ -1,15 +1,15 @@
-import {ImapSyncSessionMailbox} from "./ImapSyncSessionMailbox.js"
+import {ImapSyncSessionMailbox, SyncSessionMailboxImportance} from "./ImapSyncSessionMailbox.js"
 import {ImapSyncState, MailboxState} from "./ImapSyncState.js"
 import {AdSyncEventListener, AdSyncEventType} from "./AdSyncEventListener.js"
-import {AdSyncEfficiencyScoreOptimizer} from "./optimizer/AdSyncEfficiencyScoreOptimizer.js"
-import {ImapSyncSessionProcess} from "./ImapSyncSessionProcess.js"
+import {AdSyncParallelProcessesOptimizer} from "./optimizer/AdSyncParallelProcessesOptimizer.js"
+import {ImapSyncSessionProcess, SyncSessionProcessState} from "./ImapSyncSessionProcess.js"
 import {AdSyncDownloadBlockSizeOptimizer} from "./optimizer/AdSyncDownloadBlockSizeOptimizer.js"
 import {ProgrammingError} from "../../../api/common/error/ProgrammingError.js"
 import {ImapFlow} from "imapflow"
 import {ImapMailbox} from "./imapmail/ImapMailbox.js"
 
-const DOWNLOADED_QUOTA_SAFETY_THRESHOLD: number = 50000 // in byte
-const DEFAULT_POSTPONE_TIME: number = 24 * 60 * 60 * 1000 // 1 day
+const DOWNLOADED_QUOTA_SAFETY_THRESHOLD: number = 50000000 // in byte
+const DEFAULT_POSTPONE_TIME: number = 24 * 60 * 60 * 1000 // 24 hours
 
 export enum SyncSessionState {
 	RUNNING,
@@ -31,7 +31,7 @@ export interface SyncSessionEventListener {
 export class ImapSyncSession implements SyncSessionEventListener {
 	private imapSyncState: ImapSyncState
 	private state: SyncSessionState
-	private adSyncOptimizer?: AdSyncEfficiencyScoreOptimizer
+	private adSyncOptimizer?: AdSyncParallelProcessesOptimizer
 	private adSyncEventListener?: AdSyncEventListener
 	private runningSyncSessionProcesses: Map<number, ImapSyncSessionProcess> = new Map()
 	private downloadedQuota: number = 0
@@ -45,7 +45,7 @@ export class ImapSyncSession implements SyncSessionEventListener {
 		this.adSyncEventListener = adSyncEventListener
 		this.state = SyncSessionState.RUNNING
 
-		this.runSyncSession(adSyncEventListener)
+		this.runSyncSession()
 		return this.state
 	}
 
@@ -69,14 +69,14 @@ export class ImapSyncSession implements SyncSessionEventListener {
 		}
 	}
 
-	private async runSyncSession(adSyncEventListener: AdSyncEventListener) {
-		let mailboxes = await this.setupSyncSession(adSyncEventListener)
+	private async runSyncSession() {
+		let mailboxes = await this.setupSyncSession()
 
-		this.adSyncOptimizer = new AdSyncEfficiencyScoreOptimizer(mailboxes, 3, this)
+		this.adSyncOptimizer = new AdSyncParallelProcessesOptimizer(mailboxes, 1, this)
 		this.adSyncOptimizer.startAdSyncOptimizer()
 	}
 
-	private async setupSyncSession(adSyncEventListener: AdSyncEventListener): Promise<ImapSyncSessionMailbox[]> {
+	private async setupSyncSession(): Promise<ImapSyncSessionMailbox[]> {
 		let knownMailboxes = this.imapSyncState.mailboxStates.map(mailboxState => {
 			return new ImapSyncSessionMailbox(mailboxState)
 		})
@@ -145,8 +145,8 @@ export class ImapSyncSession implements SyncSessionEventListener {
 			syncSessionMailbox.specialUse = imapMailbox.specialUse
 		}
 
-		// some settings lead to a efficiencyScore of 0 (zero) which means that the mailbox should not be migrated
-		if (syncSessionMailbox.efficiencyScore != 0) {
+		// some settings lead to importance "NO_SYNC" which means that the mailbox should not be imported / migrated
+		if (syncSessionMailbox.importance != SyncSessionMailboxImportance.NO_SYNC) {
 			result.push(syncSessionMailbox)
 		}
 
@@ -157,26 +157,33 @@ export class ImapSyncSession implements SyncSessionEventListener {
 	}
 
 	onStartSyncSessionProcess(processId: number, nextMailboxToDownload: ImapSyncSessionMailbox): void {
-		console.log("onStartSyncSessionProcess")
+		if (this.state == SyncSessionState.RUNNING) {
+			console.log("onStartSyncSessionProcess : processId: " + processId + " -> " + nextMailboxToDownload.mailboxState.path)
 
-		if (!this.adSyncOptimizer) {
-			throw new ProgrammingError("The SyncSessionEventListener should be exclusively used by the AdSyncEfficiencyScoreOptimizer!")
+			if (!this.adSyncOptimizer) {
+				throw new ProgrammingError("The SyncSessionEventListener should be exclusively used by the AdSyncEfficiencyScoreOptimizer!")
+			}
+
+			if (!this.adSyncEventListener) {
+				throw new ProgrammingError("The AdSyncEventListener has not been set!")
+			}
+
+			let adSyncDownloadBlockSizeOptimizer = new AdSyncDownloadBlockSizeOptimizer(nextMailboxToDownload, 100)
+			let syncSessionProcess = new ImapSyncSessionProcess(processId, this.adSyncOptimizer, this.imapSyncState.imapAccount, adSyncDownloadBlockSizeOptimizer)
+
+			this.runningSyncSessionProcesses.set(syncSessionProcess.processId, syncSessionProcess)
+			syncSessionProcess.startSyncSessionProcess(this.adSyncEventListener).then((state) => {
+				if (state == SyncSessionProcessState.CONNECTION_FAILED) { // TODO we may have exceeded a rate limit on the number of parallel connections
+					this.adSyncOptimizer?.forceStopSyncSessionProcess(processId)
+				} else {
+					adSyncDownloadBlockSizeOptimizer.startAdSyncOptimizer()
+				}
+			})
 		}
-
-		if (!this.adSyncEventListener) {
-			throw new ProgrammingError("The AdSyncEventListener has not been set!")
-		}
-
-		let adSyncDownloadBlockSizeOptimizer = new AdSyncDownloadBlockSizeOptimizer(nextMailboxToDownload, 50)
-		let syncSessionProcess = new ImapSyncSessionProcess(processId, this.adSyncOptimizer, this.imapSyncState.imapAccount, adSyncDownloadBlockSizeOptimizer)
-
-		this.runningSyncSessionProcesses.set(syncSessionProcess.processId, syncSessionProcess)
-		syncSessionProcess.startSyncSessionProcess(this.adSyncEventListener)
-		adSyncDownloadBlockSizeOptimizer.startAdSyncOptimizer()
 	}
 
 	onStopSyncSessionProcess(nextProcessIdToDrop: number): void {
-		console.log("onStopSyncSessionProcess")
+		console.log("onStopSyncSessionProcess : processId: " + nextProcessIdToDrop)
 
 		let syncSessionProcessToDrop = this.runningSyncSessionProcesses.get(nextProcessIdToDrop)
 

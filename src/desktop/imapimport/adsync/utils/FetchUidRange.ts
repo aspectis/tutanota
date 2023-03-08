@@ -3,6 +3,7 @@ const {ImapFlow} = require('imapflow');
 export class FetchUidRange {
 	fromUid?: number
 	toUid?: number | string
+	currentDownloadBlockSize = 0
 	private fromSeq: number = 1
 	private toSeq?: number
 	private readonly imapClient: typeof ImapFlow
@@ -29,6 +30,8 @@ export class FetchUidRange {
 	}
 
 	private async updateFetchUidRange(from: number, downloadBlockSize: number, isUid: boolean) {
+		this.currentDownloadBlockSize = downloadBlockSize
+
 		// if mail sequence number > mail count, we reached the end, and we can stop the download
 		if (this.mailCount == null || !isUid && from > this.mailCount) {
 			this.fromUid = undefined

@@ -12,7 +12,7 @@ export class ImapImporter implements AdSyncEventListener {
 
 	private imapAdSync: ImapAdSync | null = null
 	private imapImportState: ImapImportState = new ImapImportState(ImportState.PAUSED, new Date(Date.now()))
-	private testCounter = 0
+	private testMailCounter = 0
 	private testDownloadTime: Date = new Date()
 
 	constructor(
@@ -61,36 +61,25 @@ export class ImapImporter implements AdSyncEventListener {
 	onMail(mail: ImapMail, eventType: AdSyncEventType): void {
 		//console.log("onMail")
 		//console.log(mail)
-		this.testCounter += 1
-		//console.log(this.testCounter)
-
-		if (mail.attachments) {
-			console.log("has attachment!")
-		}
-
-		//TODO messageId is empty!
-		// if (mail.uid) {
-		// 	let mailFileName = mail.uid.toString()
-		//
-		// 	// @ts-ignore
-		// 	fs.writeFile("/home/jhm/Test/" + mailFileName + ".txt", mailFileName, function (err: any) {
-		// 	});
-		// }
+		this.testMailCounter += 1
 	}
 
 	onPostpone(postponedUntil: Date): void {
-		console.log("onPostpone " + postponedUntil)
+		console.log("onPostpone")
+		console.log(postponedUntil)
 	}
 
 	onFinish(downloadedQuota: number): void {
 		console.log("onFinish")
-		console.log(downloadedQuota)
-		console.log("Took (ms): " + (Date.now() - this.testDownloadTime.getTime()))
+		let downloadTime = Date.now() - this.testDownloadTime.getTime()
+		console.log("Downloaded data (byte): " + downloadedQuota)
+		console.log("Took (ms): " + downloadTime)
+		console.log("Average throughput (bytes/ms): " + downloadedQuota / downloadTime)
+		console.log("# amount of mails downloaded: " + this.testMailCounter)
 	}
 
 	onError(error: ImapError): void {
-		console.log("onError " + error)
+		console.log("onError")
 		console.log(error)
 	}
-
 }
