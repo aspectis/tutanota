@@ -4,8 +4,11 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.TypeConverters
 import de.tutao.tutanota.alarms.AlarmNotificationEntity
+import de.tutao.tutanota.alarms.EncryptedRepeatRule.ExcludedListConverter
 
+@TypeConverters(value = [ExcludedListConverter::class])
 @Database(version = 1, entities = [KeyValue::class, PushIdentifierKey::class, AlarmNotificationEntity::class, User::class])
 abstract class AppDatabase : RoomDatabase() {
 	abstract fun keyValueDao(): KeyValueDao

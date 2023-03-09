@@ -40,6 +40,7 @@ import { assertMainOrNode } from "../../api/common/Env"
 import { ChildArray, Children } from "mithril"
 import { DateProvider } from "../../api/common/DateProvider"
 import { TIMESTAMP_ZERO_YEAR } from "@tutao/tutanota-utils/dist/DateUtils"
+import { createDateWrapper } from "../../api/entities/sys/TypeRefs.js"
 
 assertMainOrNode()
 export const CALENDAR_EVENT_HEIGHT: number = size.calendar_line_height + 2
