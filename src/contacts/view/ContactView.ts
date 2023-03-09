@@ -49,6 +49,7 @@ import { DrawerMenuAttrs } from "../../gui/nav/DrawerMenu.js"
 import { BaseTopLevelView } from "../../gui/BaseTopLevelView.js"
 import { TopLevelAttrs, TopLevelView } from "../../TopLevelView.js"
 import { stateBgHover } from "../../gui/builtinThemes.js"
+import {searchBar} from "../../search/SearchBar.js"
 
 assertMainOrNode()
 
@@ -162,6 +163,10 @@ export class ContactView extends BaseTopLevelView implements TopLevelView<Contac
 					headerView: this.renderHeaderView(),
 					rightView: this.renderHeaderRightView(),
 					viewSlider: this.viewSlider,
+					searchBar: () => m(searchBar, {
+						spacer: true,
+						placeholder: "searchContacts_placeholder",
+					}),
 					...attrs.header,
 				}),
 				bottomNav: m(BottomNav),

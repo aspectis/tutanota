@@ -63,6 +63,7 @@ import { getAvailableDomains } from "./mailaddress/MailAddressesUtils.js"
 import { DrawerMenuAttrs } from "../gui/nav/DrawerMenu.js"
 import { BaseTopLevelView } from "../gui/BaseTopLevelView.js"
 import { TopLevelAttrs, TopLevelView } from "../TopLevelView.js"
+import { searchBar } from "../search/SearchBar.js"
 
 assertMainOrNode()
 
@@ -392,11 +393,32 @@ export class SettingsView extends BaseTopLevelView implements TopLevelView<Setti
 			m(this.viewSlider, {
 				header: m(Header, {
 					viewSlider: this.viewSlider,
+					searchBar: () => this.renderSearchBar(),
 					...attrs.header,
 				}),
 				bottomNav: m(BottomNav),
 			}),
 		)
+	}
+
+	private renderSearchBar(): Children {
+		const route = m.route.get()
+		return route.startsWith("/settings/users")
+			? m(searchBar, {
+					spacer: true,
+					placeholder: "searchUsers_placeholder",
+			  })
+			: route.startsWith("/settings/groups")
+			? m(searchBar, {
+					spacer: true,
+					placeholder: "searchGroups_placeholder",
+			  })
+			: route.startsWith("settings/whitelabelaccounts")
+			? m(searchBar, {
+					spacer: true,
+					placeholder: "emptyString_label",
+			  })
+			: null
 	}
 
 	_createSettingsFolderNavButton(folder: SettingsFolder<unknown>): NavButtonAttrs {

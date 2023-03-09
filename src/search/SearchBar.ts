@@ -25,7 +25,7 @@ import { FULL_INDEXED_TIMESTAMP, Keys, TabIndex } from "../api/common/TutanotaCo
 import { assertMainOrNode, isApp } from "../api/common/Env"
 import { styles } from "../gui/styles"
 import { client } from "../misc/ClientDetector"
-import { debounce, downcast, flat, groupBy, isSameTypeRef, mod, ofClass, promiseMap, TypeRef } from "@tutao/tutanota-utils"
+import { debounce, downcast, flat, groupBy, isSameTypeRef, mod, noOp, ofClass, promiseMap, TypeRef } from "@tutao/tutanota-utils"
 import { PageSize } from "../gui/base/List"
 import { BrowserType } from "../misc/ClientConstants"
 import { hasMoreResults } from "./model/SearchModel"
@@ -40,14 +40,13 @@ import { compareContacts } from "../contacts/view/ContactGuiUtils"
 import { LayerType } from "../RootView"
 
 assertMainOrNode()
-
 export type ShowMoreAction = {
 	resultCount: number
 	shownCount: number
 	indexTimestamp: number
 	allowShowMore: boolean
 }
-type SearchBarAttrs = {
+export type SearchBarAttrs = {
 	classes?: string
 	style?: Record<string, string>
 	alwaysExpanded?: boolean
@@ -69,223 +68,238 @@ export type SearchBarState = {
 }
 
 export class SearchBar implements Component<SearchBarAttrs> {
+	view: Component<SearchBarAttrs>["view"]
 	private _domInput!: HTMLInputElement
 	private _domWrapper!: HTMLElement
-	focused: boolean = false
+	focused: boolean
 	expanded!: boolean
-	skipNextBlur: Stream<boolean> = stream<boolean>(false)
-	private _state: Stream<SearchBarState> = stream<SearchBarState>({
-		query: "",
-		searchResult: null,
-		indexState: locator.search.indexState(),
-		entities: [] as Entries,
-		selected: null,
-	})
+	skipNextBlur: Stream<boolean>
+	private _state: Stream<SearchBarState>
 	oncreate: Component<SearchBarAttrs>["oncreate"]
-	busy: boolean = false
+	busy: boolean
+	private _groupInfoRestrictionListId: Id | null
+	lastSelectedGroupInfoResult: Stream<GroupInfo>
+	lastSelectedWhitelabelChildrenInfoResult: Stream<WhitelabelChild>
 	private _closeOverlayFunction: (() => Promise<void>) | null = null
-	private _overlayContentComponent: Component = {
-		view: () => {
-			return m(SearchBarOverlay, {
-				state: this._state(),
-				isQuickSearch: this._isQuickSearch(),
-				isFocused: this.focused,
-				isExpanded: this.expanded,
-				skipNextBlur: this.skipNextBlur,
-				selectResult: (selected) => this._selectResult(selected),
-			})
-		},
-	}
+	private _overlayContentComponent: Component
 	private _confirmDialogShown: boolean = false
-	private stateStream: Stream<void> = Stream<void>()
-	private lastQueryStream: Stream<void> = Stream<void>()
-	private indexStateStream: Stream<void> = Stream<void>()
-	private shortcuts: Shortcut[] = []
-	// a little optimization to not call getRestriction() on every redraw
-	private lastPath: string | null = null
 
-	view({ attrs }: Vnode<SearchBarAttrs>): Children {
-		const newPath = m.route.get()
-		if (this.lastPath == null || newPath !== this.lastPath) {
-			this.lastPath = newPath
-			if (locator.search.isNewSearch(this._state().query, getRestriction(newPath))) {
-				this._updateState({
-					searchResult: null,
-					entities: [],
+	constructor() {
+		this._groupInfoRestrictionListId = null
+		this.lastSelectedGroupInfoResult = stream()
+		this.lastSelectedWhitelabelChildrenInfoResult = stream()
+		this.focused = false
+		this.skipNextBlur = stream<boolean>(false)
+		this.busy = false
+		this._state = stream<SearchBarState>({
+			query: "",
+			searchResult: null,
+			indexState: locator.search.indexState(),
+			entities: [] as Entries,
+			selected: null,
+		})
+		this._overlayContentComponent = {
+			view: () => {
+				return m(SearchBarOverlay, {
+					state: this._state(),
+					isQuickSearch: this._isQuickSearch(),
+					isFocused: this.focused,
+					isExpanded: this.expanded,
+					skipNextBlur: this.skipNextBlur,
+					selectResult: (selected) => this._selectResult(selected),
 				})
-			}
-		}
-		return m(
-			".flex" + (attrs.classes || ""),
-			{
-				style: attrs.style,
 			},
-			[
-				m(
-					".search-bar.flex-end.items-center" + landmarkAttrs(AriaLandmarks.Search),
-					{
-						oncreate: (vnode) => {
-							this._domWrapper = vnode.dom as HTMLElement
-							this.shortcuts = this._setupShortcuts()
-							keyManager.registerShortcuts(this.shortcuts)
-							this.indexStateStream = locator.search.indexState.map((indexState) => {
-								// When we finished indexing, search again forcibly to not confuse anyone with old results
-								const currentResult = this._state().searchResult
+		}
+		let stateStream: Stream<void>
+		let lastQueryStream: Stream<void>
+		let indexStateStream: Stream<void>
+		let shortcuts: Shortcut[]
+		// a little optimization to not call getRestriction() on every redraw
+		let lastPath: string | null = null
 
-								if (
-									!indexState.failedIndexingUpTo &&
-									currentResult &&
-									this._state().indexState.progress !== 0 &&
-									indexState.progress === 0 &&
-									//if period is changed from search view a new search is triggered there,  and we do not want to overwrite its result
-									!this.timePeriodHasChanged(currentResult.restriction.end, indexState.aimedMailIndexTimestamp)
-								) {
-									this._doSearch(this._state().query, currentResult.restriction, m.redraw)
-								}
+		this.view = (vnode: Vnode<SearchBarAttrs>): Children => {
+			const newPath = m.route.get()
+			if (lastPath == null || newPath !== lastPath) {
+				lastPath = newPath
+				if (locator.search.isNewSearch(this._state().query, getRestriction(newPath))) {
+					this._updateState({
+						searchResult: null,
+						entities: [],
+					})
+				}
+			}
+			return m(
+				".flex" + (vnode.attrs.classes || ""),
+				{
+					style: vnode.attrs.style,
+				},
+				[
+					m(
+						".search-bar.flex-end.items-center" + landmarkAttrs(AriaLandmarks.Search),
+						{
+							oncreate: (vnode) => {
+								this._domWrapper = vnode.dom as HTMLElement
+								shortcuts = this._setupShortcuts()
+								keyManager.registerShortcuts(shortcuts)
+								indexStateStream = locator.search.indexState.map((indexState) => {
+									// When we finished indexing, search again forcibly to not confuse anyone with old results
+									const currentResult = this._state().searchResult
 
-								this._updateState({
-									indexState,
-								})
-							})
-							this.stateStream = this._state.map((state) => {
-								this._showOverlay()
-
-								if (this._domInput) {
-									const input = this._domInput
-
-									if (state.query !== input.value) {
-										input.value = state.query
+									if (
+										!indexState.failedIndexingUpTo &&
+										currentResult &&
+										this._state().indexState.progress !== 0 &&
+										indexState.progress === 0 &&
+										//if period is changed from search view a new search is triggered there,  and we do not want to overwrite its result
+										!this.timePeriodHasChanged(currentResult.restriction.end, indexState.aimedMailIndexTimestamp)
+									) {
+										this._doSearch(this._state().query, currentResult.restriction, m.redraw)
 									}
-								}
 
-								m.redraw()
-							})
-							this.lastQueryStream = locator.search.lastQuery.map((value) => {
-								// Set value from the model when we it's set from the URL e.g. reloading the page on the search screen
-								if (value) {
 									this._updateState({
-										query: value,
+										indexState,
 									})
+								})
+								stateStream = this._state.map((state) => {
+									this._showOverlay()
 
-									this.expanded = true
-								}
-							})
-						},
-						onremove: () => {
-							this.shortcuts && keyManager.unregisterShortcuts(this.shortcuts)
+									if (this._domInput) {
+										const input = this._domInput
 
-							this.stateStream?.end(true)
-
-							this.lastQueryStream?.end(true)
-
-							this.indexStateStream?.end(true)
-
-							this._closeOverlay()
-						},
-						style: {
-							"min-height": px(inputLineHeight + 2),
-							// 2 px border
-							"padding-bottom": this.expanded ? (this.focused ? px(0) : px(1)) : px(2),
-							"padding-top": px(2),
-							// center input field
-							"margin-right": px(styles.isDesktopLayout() ? 15 : 8),
-							"border-bottom":
-								attrs.alwaysExpanded || this.expanded
-									? this.focused
-										? `2px solid ${theme.content_accent}`
-										: `1px solid ${theme.content_border}`
-									: "0px",
-							"align-self": "center",
-							"max-width": px(400),
-							flex: "1",
-						},
-					},
-					[
-						styles.isDesktopLayout()
-							? m(
-									"button.ml-negative-xs.click",
-									{
-										tabindex: TabIndex.Default,
-										title: lang.get("search_label"),
-										onmousedown: () => {
-											if (this.focused) {
-												this.skipNextBlur(true) // avoid closing of overlay when clicking search icon
-											}
-										},
-										onclick: (e: MouseEvent) => {
-											e.preventDefault()
-											this.handleSearchClick(e)
-										},
-									},
-									m(Icon, {
-										icon: BootIcons.Search,
-										class: "flex-center items-center icon-large",
-										style: {
-											fill: this.focused ? theme.header_button_selected : theme.header_button,
-										},
-									}),
-							  )
-							: null,
-						m(
-							".searchInputWrapper.flex.items-center",
-							{
-								"aria-hidden": String(!this.expanded),
-								tabindex: this.expanded ? TabIndex.Default : TabIndex.Programmatic,
-								style: (() => {
-									let paddingLeft: string
-
-									if (this.expanded || attrs.alwaysExpanded) {
-										if (styles.isDesktopLayout()) {
-											paddingLeft = px(10)
-										} else {
-											paddingLeft = px(6)
+										if (state.query !== input.value) {
+											input.value = state.query
 										}
-									} else {
-										paddingLeft = px(0)
 									}
 
-									return {
-										width: this.inputWrapperWidth(!!attrs.alwaysExpanded),
-										transition: `width ${DefaultAnimationTime}ms`,
-										"padding-left": paddingLeft,
-										"padding-top": "3px",
-										"padding-bottom": "3px",
-										"overflow-x": "hidden",
+									m.redraw()
+								})
+								lastQueryStream = locator.search.lastQuery.map((value) => {
+									// Set value from the model when we it's set from the URL e.g. reloading the page on the search screen
+									if (value) {
+										this._updateState({
+											query: value,
+										})
+
+										this.expanded = true
 									}
-								})(),
+								})
 							},
-							[
-								this._getInputField(attrs),
-								m(
-									"button.closeIconWrapper",
-									{
-										onclick: () => this.close(),
-										style: {
-											width: size.icon_size_large,
+							onremove: () => {
+								shortcuts && keyManager.unregisterShortcuts(shortcuts)
+
+								stateStream?.end(true)
+
+								lastQueryStream?.end(true)
+
+								indexStateStream?.end(true)
+
+								this._closeOverlay()
+							},
+							style: {
+								"min-height": px(inputLineHeight + 2),
+								// 2 px border
+								"padding-bottom": this.expanded ? (this.focused ? px(0) : px(1)) : px(2),
+								"padding-top": px(2),
+								// center input field
+								"margin-right": px(styles.isDesktopLayout() ? 15 : 8),
+								"border-bottom":
+									vnode.attrs.alwaysExpanded || this.expanded
+										? this.focused
+											? `2px solid ${theme.content_accent}`
+											: `1px solid ${theme.content_border}`
+										: "0px",
+								"align-self": "center",
+								"max-width": px(400),
+								flex: "1",
+							},
+						},
+						[
+							styles.isDesktopLayout()
+								? m(
+										"button.ml-negative-xs.click",
+										{
+											tabindex: TabIndex.Default,
+											title: lang.get("search_label"),
+											onmousedown: () => {
+												if (this.focused) {
+													this.skipNextBlur(true) // avoid closing of overlay when clicking search icon
+												}
+											},
+											onclick: (e: MouseEvent) => {
+												e.preventDefault()
+												this.handleSearchClick(e)
+											},
 										},
-										title: lang.get("close_alt"),
-										tabindex: this.expanded ? TabIndex.Default : TabIndex.Programmatic,
-									},
-									this.busy
-										? m(Icon, {
-												icon: BootIcons.Progress,
-												class: "flex-center items-center icon-progress-search icon-progress",
-										  })
-										: m(Icon, {
-												icon: Icons.Close,
-												class: "flex-center items-center icon-large",
-												style: {
-													fill: theme.header_button,
-												},
-										  }),
-								),
-							],
-						),
-					],
-				),
-				attrs.spacer ? m(".nav-bar-spacer") : null,
-			],
-		)
+										m(Icon, {
+											icon: BootIcons.Search,
+											class: "flex-center items-center icon-large",
+											style: {
+												fill: this.focused ? theme.header_button_selected : theme.header_button,
+											},
+										}),
+								  )
+								: null,
+							m(
+								".searchInputWrapper.flex.items-center",
+								{
+									"aria-hidden": String(!this.expanded),
+									tabindex: this.expanded ? TabIndex.Default : TabIndex.Programmatic,
+									style: (() => {
+										let paddingLeft: string
+
+										if (this.expanded || vnode.attrs.alwaysExpanded) {
+											if (styles.isDesktopLayout()) {
+												paddingLeft = px(10)
+											} else {
+												paddingLeft = px(6)
+											}
+										} else {
+											paddingLeft = px(0)
+										}
+
+										return {
+											width: this.inputWrapperWidth(!!vnode.attrs.alwaysExpanded),
+											transition: `width ${DefaultAnimationTime}ms`,
+											"padding-left": paddingLeft,
+											"padding-top": "3px",
+											"padding-bottom": "3px",
+											"overflow-x": "hidden",
+										}
+									})(),
+								},
+								[
+									this._getInputField(vnode.attrs),
+									m(
+										"button.closeIconWrapper",
+										{
+											onclick: () => this.close(),
+											style: {
+												width: size.icon_size_large,
+											},
+											title: lang.get("close_alt"),
+											tabindex: this.expanded ? TabIndex.Default : TabIndex.Programmatic,
+										},
+										this.busy
+											? m(Icon, {
+													icon: BootIcons.Progress,
+													class: "flex-center items-center icon-progress-search icon-progress",
+											  })
+											: m(Icon, {
+													icon: Icons.Close,
+													class: "flex-center items-center icon-large",
+													style: {
+														fill: theme.header_button,
+													},
+											  }),
+									),
+								],
+							),
+						],
+					),
+					vnode.attrs.spacer ? m(".nav-bar-spacer") : null,
+				],
+			)
+		}
 	}
 
 	private timePeriodHasChanged(oldEnd: number | null, aimedEnd: number): boolean {
@@ -367,6 +381,11 @@ export class SearchBar implements Component<SearchBarAttrs> {
 		]
 	}
 
+	// TODO: remove this and take the list id from the url as soon as the list id is included in user and group settings
+	setGroupInfoRestrictionListId(listId: Id) {
+		this._groupInfoRestrictionListId = listId
+	}
+
 	_downloadResults({ results, restriction }: SearchResult): Promise<Array<Entry>> {
 		if (results.length === 0) {
 			return Promise.resolve([])
@@ -416,9 +435,9 @@ export class SearchBar implements Component<SearchBarAttrs> {
 			} else if (isSameTypeRef(ContactTypeRef, type)) {
 				this._updateSearchUrl(query, downcast(result))
 			} else if (isSameTypeRef(GroupInfoTypeRef, type)) {
-				locator.search.lastSelectedGroupInfoResult(downcast(result))
+				this.lastSelectedGroupInfoResult(downcast(result))
 			} else if (isSameTypeRef(WhitelabelChildTypeRef, type)) {
-				locator.search.lastSelectedWhitelabelChildrenInfoResult(downcast(result))
+				this.lastSelectedWhitelabelChildrenInfoResult(downcast(result))
 			}
 		}
 	}
@@ -453,7 +472,7 @@ export class SearchBar implements Component<SearchBarAttrs> {
 		let restriction = this._getRestriction()
 
 		if (isSameTypeRef(restriction.type, GroupInfoTypeRef)) {
-			restriction.listId = locator.search.getGroupInfoRestrictionListId()
+			restriction.listId = this._groupInfoRestrictionListId
 		}
 
 		if (!locator.search.indexState().mailIndexEnabled && restriction && isSameTypeRef(restriction.type, MailTypeRef) && !this._confirmDialogShown) {
@@ -623,7 +642,7 @@ export class SearchBar implements Component<SearchBarAttrs> {
 		return filteredInstances
 	}
 
-	_getInputField(attrs: any): Children {
+	_getInputField(attrs: SearchBarAttrs): Children {
 		return m("input.input.input-no-clear", {
 			"aria-autocomplete": "list",
 			tabindex: this.expanded ? TabIndex.Default : TabIndex.Programmatic,
@@ -683,9 +702,8 @@ export class SearchBar implements Component<SearchBarAttrs> {
 									this.search()
 								}
 							}
-							if (attrs.returnListener) {
-								attrs.returnListener()
-							}
+
+							attrs
 						},
 					},
 					{
@@ -780,3 +798,6 @@ export class SearchBar implements Component<SearchBarAttrs> {
 		return newState
 	}
 }
+
+// at least for now
+export const searchBar = new SearchBar()

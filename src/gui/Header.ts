@@ -10,7 +10,6 @@ import { theme } from "./theme.js"
 import { FeatureType, Keys } from "../api/common/TutanotaConstants.js"
 import { px, size as sizes } from "./size.js"
 import { BootIcons } from "./base/icons/BootIcons.js"
-import { SearchBar } from "../search/SearchBar.js"
 import type { IMainLocator } from "../api/main/MainLocator.js"
 import { CALENDAR_PREFIX, CONTACTS_PREFIX, MAIL_PREFIX, navButtonRoutes, SEARCH_PREFIX } from "../misc/RouteChange.js"
 import { AriaLandmarks, landmarkAttrs } from "./AriaUtils.js"
@@ -38,7 +37,7 @@ export interface HeaderAttrs extends BaseHeaderAttrs {
 	rightView?: Children
 	handleBackPress?: () => boolean
 	overrideBackIcon?: "back" | "menu"
-	searchBarReturnListener?: (() => void) | null
+	searchBar?: () => Children
 }
 
 export class Header implements ClassComponent<HeaderAttrs> {
@@ -94,13 +93,7 @@ export class Header implements ClassComponent<HeaderAttrs> {
 	}
 
 	private renderDesktopSearchBar(attrs: HeaderAttrs): Children {
-		return this.desktopSearchBarVisible()
-			? m(SearchBar, {
-					spacer: true,
-					placeholder: this.searchPlaceholder(),
-					returnListener: attrs.searchBarReturnListener,
-			  })
-			: null
+		return attrs.searchBar ? attrs.searchBar() : null
 	}
 
 	private focusMain(attrs: HeaderAttrs) {
@@ -198,9 +191,11 @@ export class Header implements ClassComponent<HeaderAttrs> {
 			return m(".flex-center.header-middle.text-ellipsis.b", [left || null, m(".mt-s", title), right || null])
 		}
 
-		if (this.mobileSearchBarVisible()) {
-			return this.renderMobileSearchBar()
-		} else if (attrs.viewSlider) {
+		// Need to add some center injection
+		// if (this.mobileSearchBarVisible()) {
+		// 	return this.renderMobileSearchBar(attrs)
+		// } else
+			if (attrs.viewSlider) {
 			const firstVisibleBgColumn = attrs.viewSlider.getBackgroundColumns().find((c) => c.visible)
 
 			if (firstVisibleBgColumn) {
@@ -226,29 +221,29 @@ export class Header implements ClassComponent<HeaderAttrs> {
 		return isNotTemporary() ? (styles.isUsingBottomNavigation() ? this.renderHeaderAction(attrs) : this.renderFullNavigation(attrs)) : null
 	}
 
-	private renderMobileSearchBar(): Children {
-		let placeholder
-		const route = m.route.get()
-
-		if (route.startsWith("/search/mail")) {
-			placeholder = lang.get("searchEmails_placeholder")
-		} else if (route.startsWith("/search/contact")) {
-			placeholder = lang.get("searchContacts_placeholder")
-		} else {
-			placeholder = null
-		}
-
-		return m(SearchBar, {
-			alwaysExpanded: true,
-			classes: ".flex-center",
-			placeholder,
-			style: {
-				height: "100%",
-				"margin-left": px(sizes.navbar_edge_width_mobile),
-				"margin-right": px(sizes.navbar_edge_width_mobile),
-			},
-		})
-	}
+	// FIXME remove
+	// private renderMobileSearchBar(attrs: HeaderAttrs): Children {
+	// 	// let placeholder
+	// 	// const route = m.route.get()
+	// 	//
+	// 	// if (route.startsWith("/search/mail")) {
+	// 	// 	placeholder = lang.get("searchEmails_placeholder")
+	// 	// } else if (route.startsWith("/search/contact")) {
+	// 	// 	placeholder = lang.get("searchContacts_placeholder")
+	// 	// } else {
+	// 	// 	placeholder = null
+	// 	// }
+	//
+	// 	return attrs.searchBar({
+	// 		alwaysExpanded: true,
+	// 		classes: ".flex-center",
+	// 		style: {
+	// 			height: "100%",
+	// 			"margin-left": px(sizes.navbar_edge_width_mobile),
+	// 			"margin-right": px(sizes.navbar_edge_width_mobile),
+	// 		},
+	// 	})
+	// }
 
 	private renderLeftContent(attrs: HeaderAttrs): Children {
 		const showBackButton = this.isBackButtonVisible(attrs)
@@ -316,39 +311,6 @@ export class Header implements ClassComponent<HeaderAttrs> {
 		}
 
 		return attrs.overrideBackIcon ? attrs.overrideBackIcon === "back" : !attrs.viewSlider.getBackgroundColumns()[0].visible
-	}
-
-	private searchPlaceholder(): string | null {
-		const route = m.route.get()
-
-		if (route.startsWith(MAIL_PREFIX) || route.startsWith("/search/mail")) {
-			return lang.get("searchEmails_placeholder")
-		} else if (route.startsWith(CONTACTS_PREFIX) || route.startsWith("/search/contact")) {
-			return lang.get("searchContacts_placeholder")
-		} else if (route.startsWith("/settings/users")) {
-			return lang.get("searchUsers_placeholder")
-		} else if (route.startsWith("/settings/groups")) {
-			return lang.get("searchGroups_placeholder")
-		} else {
-			return null
-		}
-	}
-
-	private desktopSearchBarVisible(): boolean {
-		let route = m.route.get()
-		let locator: IMainLocator | null = window.tutao.locator
-		return (
-			locator != null &&
-			!locator.search.indexState().initializing &&
-			styles.isDesktopLayout() &&
-			logins.isInternalUserLoggedIn() &&
-			(route.startsWith(SEARCH_PREFIX) ||
-				route.startsWith(MAIL_PREFIX) ||
-				route.startsWith(CONTACTS_PREFIX) ||
-				route.startsWith("/settings/users") ||
-				route.startsWith("/settings/groups") ||
-				route.startsWith("/settings/whitelabelaccounts"))
-		)
 	}
 }
 

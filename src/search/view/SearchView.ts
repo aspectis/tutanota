@@ -32,7 +32,7 @@ import { Icons } from "../../gui/base/icons/Icons"
 import { logins } from "../../api/main/LoginController"
 import { PageSize } from "../../gui/base/List"
 import { MultiSelectionBar } from "../../gui/base/MultiSelectionBar"
-import { BaseHeaderAttrs, Header } from "../../gui/Header.js"
+import {BaseHeaderAttrs, Header, HeaderAttrs} from "../../gui/Header.js"
 import type { EntityUpdateData } from "../../api/main/EventController"
 import { isUpdateForTypeRef } from "../../api/main/EventController"
 import { getStartOfTheWeekOffsetForUser } from "../../calendar/date/CalendarUtils"
@@ -59,6 +59,7 @@ import { BaseTopLevelView } from "../../gui/BaseTopLevelView.js"
 import { TopLevelAttrs, TopLevelView } from "../../TopLevelView.js"
 import { MailboxDetail } from "../../mail/model/MailModel.js"
 import Stream from "mithril/stream"
+import {searchBar, SearchBarAttrs} from "../SearchBar.js"
 
 assertMainOrNode()
 
@@ -222,9 +223,15 @@ export class SearchView extends BaseTopLevelView implements TopLevelView<SearchV
 					headerView: this.renderHeaderView(),
 					rightView: this.renderHeaderRightView(),
 					viewSlider: this.viewSlider,
-					searchBarReturnListener: () => this.resultListColumn.focus(),
+					searchBar: () =>
+						m(searchBar, {
+							spacer: true,
+							placeholder: m.route.get().startsWith("/search/mail") ? "searchEmails_placeholder" : "searchContacts_placeholder",
+							returnListener: () => this.resultListColumn.focus(),
+						} satisfies SearchBarAttrs),
+					// // FIXME also needs a mobile search field
 					...attrs.header,
-				}),
+				} satisfies HeaderAttrs),
 				bottomNav:
 					styles.isSingleColumnLayout() && this.viewSlider.focusedColumn === this.resultDetailsColumn && this.viewer.viewer?.mode === "mail"
 						? m(MobileMailActionBar, { viewModel: this.viewer.viewer.viewModel })

@@ -50,6 +50,7 @@ import { assertSystemFolderOfType, isSpamOrTrashFolder, isSubfolderOfType } from
 import { FolderColumnView } from "../../gui/FolderColumnView.js"
 import { SidebarSection } from "../../gui/SidebarSection.js"
 import { EditFoldersDialog } from "./EditFoldersDialog.js"
+import {searchBar} from "../../search/SearchBar.js"
 
 assertMainOrNode()
 
@@ -218,6 +219,10 @@ export class MailView extends BaseTopLevelView implements TopLevelView<MailViewA
 					headerView: this.renderHeaderView(),
 					rightView: this.renderHeaderRightView(),
 					viewSlider: this.viewSlider,
+					searchBar: () => m(searchBar, {
+						spacer: true,
+						placeholder: "searchEmails_placeholder",
+					}),
 					...attrs.header,
 				}),
 				bottomNav:
